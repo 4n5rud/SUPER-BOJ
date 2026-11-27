@@ -218,10 +218,94 @@ fn records_each_language_and_rejects_cross_language_linking() {
     }
 }
 
+fn connect_repository(host: &mut Host, dir: &Path, auto_sync: bool) {
+    host.ok("GET_SETTINGS", json!({}));
+    let db = rusqlite::Connection::open(dir.join("database/super-boj.db")).unwrap();
+    db.execute(
+        "INSERT INTO repositories(id, remote_url, branch, local_path, auto_sync)
+         VALUES ('repo', 'https://github.com/alice/solutions', 'main', ?1, ?2)",
+        rusqlite::params![dir.join("clone").to_str().unwrap(), auto_sync],
+    )
+    .unwrap();
+}
+
+fn submission_row(dir: &Path, id: &str) -> (String, Option<u32>, Option<u32>, i64) {
+    let db = rusqlite::Connection::open(dir.join("database/super-boj.db")).unwrap();
+    db.query_row(
+        "SELECT verdict, execution_time_ms, memory_kb, revision FROM submissions WHERE boj_submission_id=?1",
+        [id],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+    )
+    .unwrap()
+}
+
+#[test]
+fn import_requires_an_active_repository_with_auto_sync() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut host = Host::start(dir.path());
+    let import = json!({
+        "accountContext": "alice", "problemId": 1330, "problemTitle": "두 수 비교하기",
+        "submissionId": "300", "source": "print(1)\n", "language": "python", "rawVerdict": "맞았습니다!!",
+    });
+    assert_eq!(host.request("IMPORT_ACCEPTED_SUBMISSION", import.clone())["error"]["code"], "AUTO_SYNC_DISABLED");
+    connect_repository(&mut host, dir.path(), false);
+    assert_eq!(host.request("IMPORT_ACCEPTED_SUBMISSION", import)["error"]["code"], "AUTO_SYNC_DISABLED");
+}
+
+#[test]
+fn import_finishes_a_submission_that_was_recorded_before_judging_ended() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut host = Host::start(dir.path());
+    connect_repository(&mut host, dir.path(), true);
+    let intent = Uuid::new_v4();
+    host.ok("CREATE_SUBMISSION_INTENT", json!({
+        "intentId": intent, "accountContext": "alice", "problemId": 1330,
+        "problemTitle": "두 수 비교하기", "source": "print(1)\n", "language": "python",
+    }));
+    host.ok("CONFIRM_SUBMISSION", json!({
+        "intentId": intent, "submissionId": "301", "accountContext": "alice", "problemId": 1330,
+        "source": "print(1)\n", "language": "python", "rawVerdict": "채점 중 (50%)",
+    }));
+    let before = submission_row(dir.path(), "301");
+    assert_eq!(before.0, "JUDGING");
+    let import = json!({
+        "accountContext": "alice", "problemId": 1330, "problemTitle": "두 수 비교하기",
+        "submissionId": "301", "source": "print(1)\n", "language": "python",
+        "rawVerdict": "맞았습니다!!", "executionTimeMs": 40, "memoryKb": 31120,
+    });
+    let reply = host.ok("IMPORT_ACCEPTED_SUBMISSION", import.clone());
+    assert_eq!((reply["duplicate"].as_bool(), reply["updated"].as_bool()), (Some(true), Some(true)));
+    let after = submission_row(dir.path(), "301");
+    assert_eq!((after.0.as_str(), after.1, after.2), ("ACCEPTED", Some(40), Some(31120)));
+    assert_eq!(after.3, before.3 + 1);
+    assert_eq!(host.ok("IMPORT_ACCEPTED_SUBMISSION", import)["updated"], false);
+    assert_eq!(submission_row(dir.path(), "301").3, after.3);
+}
+
+#[test]
+fn import_fills_missing_time_and_memory_of_an_accepted_submission() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut host = Host::start(dir.path());
+    connect_repository(&mut host, dir.path(), true);
+    let mut import = json!({
+        "accountContext": "alice", "problemId": 1330, "problemTitle": "두 수 비교하기",
+        "submissionId": "302", "source": "print(1)\n", "language": "python", "rawVerdict": "맞았습니다!!",
+    });
+    assert_eq!(host.ok("IMPORT_ACCEPTED_SUBMISSION", import.clone())["duplicate"], false);
+    let before = submission_row(dir.path(), "302");
+    assert_eq!((before.1, before.2), (None, None));
+    import["executionTimeMs"] = json!(12);
+    import["memoryKb"] = json!(2048);
+    assert_eq!(host.ok("IMPORT_ACCEPTED_SUBMISSION", import)["updated"], true);
+    let after = submission_row(dir.path(), "302");
+    assert_eq!((after.1, after.2, after.3), (Some(12), Some(2048), before.3 + 1));
+}
+
 #[test]
 fn imports_accepted_submission_once_without_a_preparation_record() {
     let dir = tempfile::tempdir().unwrap();
     let mut host = Host::start(dir.path());
+    connect_repository(&mut host, dir.path(), true);
     let mut import = json!({
         "accountContext": "alice", "problemId": 1330, "problemTitle": "두 수 비교하기",
         "submissionId": "200", "source": "print(1)\n", "language": "python",

@@ -307,6 +307,16 @@ fn shared_request_fixtures_match_native_host() {
     let mut host = Host::start();
     for fixture in fixtures.as_array().unwrap() {
         let request = &fixture["request"];
+        if request["type"] == "IMPORT_ACCEPTED_SUBMISSION" {
+            // Importing needs a connected repository with automatic sync turned on.
+            let db = rusqlite::Connection::open(host.data_dir.path().join("sandbox/database/super-boj.db")).unwrap();
+            db.execute(
+                "INSERT INTO repositories(id, remote_url, branch, local_path, auto_sync)
+                 VALUES ('fixture', 'https://github.com/fixture/solutions', 'main', 'unused', 1)",
+                [],
+            )
+            .unwrap();
+        }
         let bytes = serde_json::to_vec(&request).unwrap();
         let input = host.input.as_mut().unwrap();
         input

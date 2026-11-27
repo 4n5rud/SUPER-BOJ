@@ -26,7 +26,7 @@
 | `CANCEL` | `jobId` |
 | `CREATE_SUBMISSION_INTENT` | `intentId`, `accountContext`, `problemId`, `problemTitle`, `source`, 선택적 `language` |
 | `CONFIRM_SUBMISSION` | `intentId`, `submissionId`, `accountContext`, `problemId`, `source`, 선택적 `language`, `rawVerdict`, `executionTimeMs`, `memoryKb`, `submittedAt` |
-| `IMPORT_ACCEPTED_SUBMISSION` | `submissionId`, `accountContext`, `problemId`, `problemTitle`, `source`, `rawVerdict`(`맞았습니다!!`만 허용), 선택적 `language`, `executionTimeMs`, `memoryKb`, `submittedAt` |
+| `IMPORT_ACCEPTED_SUBMISSION` | `submissionId`, `accountContext`, `problemId`, `problemTitle`, `source`, `rawVerdict`(`맞았습니다!!` 또는 `Accepted`만 허용), 선택적 `language`, `executionTimeMs`, `memoryKb`, `submittedAt` |
 | `UPDATE_VERDICT` | `accountContext`, `submissionId`, `rawVerdict`, 선택적 `executionTimeMs`, `memoryKb` |
 | `GET_PENDING_INTENTS` | `accountContext`, `problemId`, 선택적 `language` |
 | `GET_HISTORY` | `accountContext`, 선택적 `problemId`, `before`, `limit` |
@@ -62,7 +62,7 @@
 - 준비 요청의 `accountContext`는 실제 계정을 모르는 경우 null입니다. 확인과 이력 조회에는 명시적인 계정을 전달합니다.
 - `CREATE_SUBMISSION_INTENT`는 `{intentId, sourceHash}`를 반환합니다. `GET_PENDING_INTENTS`는 `{intents: [{intentId, sourceHash, createdAt}]}`을 반환합니다.
 - `CONFIRM_SUBMISSION`은 `{submissionId, duplicate}`를 반환합니다. 준비 소스와 대조한 코드가 다르면 `SUBMISSION_MISMATCH` 오류를 반환합니다.
-- `IMPORT_ACCEPTED_SUBMISSION`은 확장의 Service Worker가 백준 채점 현황에서 감지한 내 정답 제출을 기록할 때 보냅니다. 준비 기록 없이 저장하고 GitHub 동기화 큐에 넣으며 `{submissionId, duplicate}`를 반환합니다. 같은 제출 번호를 다른 코드로 다시 보내면 `SUBMISSION_MISMATCH`, 정답이 아니면 `INVALID_MESSAGE` 오류를 반환합니다.
+- `IMPORT_ACCEPTED_SUBMISSION`은 확장의 Service Worker가 백준 채점 현황에서 감지한 내 정답 제출을 기록할 때 보냅니다. 준비 기록 없이 저장하고 GitHub 동기화 큐에 넣으며 `{submissionId, duplicate, updated}`를 반환합니다. 같은 제출 번호가 이미 있으면 `duplicate`가 true이고, 기존 판정이 정답이 아니었거나 실행 시간과 메모리가 비어 있었으면 값을 채우고 `updated`가 true입니다(새로 저장한 경우 `updated`는 없습니다). 같은 제출 번호를 다른 코드로 다시 보내면 `SUBMISSION_MISMATCH`, 정답이 아니면 `INVALID_MESSAGE`, 활성 저장소가 없거나 자동 동기화가 꺼져 있으면 `AUTO_SYNC_DISABLED` 오류를 반환합니다.
 - `UPDATE_VERDICT`는 `{submissionId, updated}`를 반환합니다. 판정 원문은 `rawVerdict`로 보존합니다.
 - `GET_HISTORY`는 `{attempts, nextCursor}`를 반환합니다. 다음 페이지에는 `nextCursor`를 `before`로 전달합니다. 목록의 기본 제한은 30건이며 1–100건 범위를 지원합니다.
 - `GET_ATTEMPT`는 이력 항목과 당시의 `source`를 반환합니다. 이력 항목에는 `id`, `accountContext`, `problemId`, `problemTitle`, `problemUrl`, `submissionId`, `language`, `sourceHash`, `verdict`, `rawVerdict`, `executionTimeMs`, `memoryKb`, `submittedAt`, `createdAt`, `updatedAt`, `gitStatus`, `commitSha`, `commitUrl`이 포함됩니다.

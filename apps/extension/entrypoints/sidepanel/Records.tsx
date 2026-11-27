@@ -224,7 +224,7 @@ export function Git({ report, online, openSetup }: { report: Report; online: boo
           <details open={repository && branch !== 'main' ? true : undefined}><summary>브랜치 설정</summary>
             <label>브랜치<input value={branch} onChange={(event) => setBranch(event.target.value)} required /></label>
           </details>
-          <label className="check"><input type="checkbox" checked={autoSync} onChange={(event) => setAuto(event.target.checked)} /> 맞은 제출을 자동으로 GitHub에 올리기</label>
+          <label className="check"><input type="checkbox" checked={autoSync} onChange={(event) => setAuto(event.target.checked)} /> 맞은 제출의 코드를 백준에서 읽어 GitHub에 자동으로 올리기</label>
           <p className="muted">공개 저장소에 동기화한 코드는 공개됩니다.</p>
           <div className="toolbar">
             <button className="primary" disabled={busy}>{editing ? '저장' : '저장소 연결'}</button>

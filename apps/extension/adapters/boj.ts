@@ -130,10 +130,17 @@ export function submissionLanguage(label: string): Language | undefined {
 
 export const acceptedVerdict = '맞았습니다!!';
 
-/** Rows of the signed-in user's accepted submissions in a supported language, newest first. */
-export function acceptedRows(rows: Status[], me: string) {
-  return rows.filter((row) => row.accountContext === me && row.rawVerdict === acceptedVerdict
-    && submissionLanguage(row.language) !== undefined);
+/** The Korean and English BOJ screens word an accepted result differently. */
+export const isAcceptedVerdict = (raw: string) => raw === acceptedVerdict || raw === 'Accepted';
+
+/**
+ * Rows of the signed-in user's accepted submissions in a supported language, newest first.
+ * With `since` (Unix ms), only rows submitted at or after it count; rows without a submission time are left out.
+ */
+export function acceptedRows(rows: Status[], me: string, since?: number) {
+  return rows.filter((row) => row.accountContext === me && isAcceptedVerdict(row.rawVerdict)
+    && submissionLanguage(row.language) !== undefined
+    && (since === undefined || (row.submittedAt !== null && Date.parse(row.submittedAt) >= since)));
 }
 
 export function problemTitle(html: string) {

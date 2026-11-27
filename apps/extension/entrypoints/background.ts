@@ -1,12 +1,13 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import { z } from 'zod';
-import { acceptedVerdict, problemSchema, siteUrl, statusSchema } from '../adapters/boj';
+import { isAcceptedVerdict, problemSchema, siteUrl, statusSchema } from '../adapters/boj';
 import { NativeClient } from '../adapters/native';
 import { readGithubSession } from '../adapters/github';
 
 import { nativeCommandSchema, payloadSchemas } from '../adapters/protocol';
 
 const gitStatusSchema = z.object({ repository: z.object({ autoSync: z.boolean() }).nullable() });
+const sinceKey = 'autoUploadSince';
 const snapshotSchema = z.object({ problem: problemSchema.nullable(), rows: z.array(statusSchema).max(100).nullable() });
 
 export default defineBackground(() => {
@@ -14,19 +15,33 @@ export default defineBackground(() => {
     session && remoteUrl ? { remoteUrl, basic: btoa(`x-access-token:${session.token}`), expiresAt: session.expiresAt } : null;
   const native = new NativeClient(async () => authorization(await readGithubSession()));
   let changingGithub = false;
+  const recordAutoUploadSince = (autoSync: boolean) => autoSync
+    ? chrome.storage.local.set({ [sinceKey]: Date.now() })
+    : chrome.storage.local.remove(sinceKey);
   void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);
   chrome.runtime.onMessage.addListener((message, sender, respond) => {
     const fromBoj = sender.id === chrome.runtime.id && sender.tab !== undefined && sender.frameId === 0
       && !!sender.url && !!siteUrl(sender.url);
     if (fromBoj && (message?.type === 'BOJ_AUTO_UPLOAD_READY' || message?.type === 'BOJ_ACCEPTED')) {
       const handleBoj = async () => {
+        // Accepted sources are read and imported only while automatic sync is on for a connected repository.
+        const status = await native.request('GET_GIT_STATUS', {}).catch(() => null);
+        const autoSync = gitStatusSchema.safeParse(status).data?.repository?.autoSync === true;
         if (message.type === 'BOJ_AUTO_UPLOAD_READY') {
-          // Accepted sources are read only after the user turned on automatic sync for a connected repository.
-          const status = await native.request('GET_GIT_STATUS', {}).catch(() => null);
-          return gitStatusSchema.safeParse(status).data?.repository?.autoSync === true;
+          // Only submissions accepted after automatic upload was turned on are uploaded.
+          if (!autoSync) {
+            await chrome.storage.local.remove(sinceKey);
+            return { ready: false, since: null };
+          }
+          const stored = (await chrome.storage.local.get(sinceKey))[sinceKey];
+          if (typeof stored === 'number') return { ready: true, since: stored };
+          const since = Date.now();
+          await chrome.storage.local.set({ [sinceKey]: since });
+          return { ready: true, since };
         }
+        if (!autoSync) throw new Error('AUTO_SYNC_DISABLED');
         const submission = payloadSchemas.IMPORT_ACCEPTED_SUBMISSION.parse(message.submission);
-        if (submission.rawVerdict !== acceptedVerdict) throw new Error('INVALID_MESSAGE');
+        if (!isAcceptedVerdict(submission.rawVerdict)) throw new Error('INVALID_MESSAGE');
         return native.request('IMPORT_ACCEPTED_SUBMISSION', submission);
       };
       void handleBoj().then(
@@ -62,13 +77,17 @@ export default defineBackground(() => {
             throw error;
           }
           await chrome.storage.session.set({ githubSession: { ...session, remoteUrl: target.remoteUrl } });
+          await recordAutoUploadSince(target.autoSync);
           return result;
         } finally {
           changingGithub = false;
         }
       }
       if (message?.type === 'NATIVE') {
-        return native.request(nativeCommandSchema.parse(message.command), message.payload);
+        const command = nativeCommandSchema.parse(message.command);
+        const result = await native.request(command, message.payload);
+        if (command === 'CONFIGURE_REPOSITORY') await recordAutoUploadSince(message.payload?.autoSync === true);
+        return result;
       }
       if (message?.type !== 'READ_CONTEXT') throw new Error('INVALID_MESSAGE');
       const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });

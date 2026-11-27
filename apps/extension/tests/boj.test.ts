@@ -40,6 +40,12 @@ test('selects only the signed-in user\'s accepted rows in supported languages', 
   const rows = [row, { ...row, submissionId: '2', accountContext: 'bob' }, { ...row, submissionId: '3', rawVerdict: '틀렸습니다' },
     { ...row, submissionId: '4', language: 'PyPy3' }, { ...row, submissionId: '5', language: 'Rust 2021' }];
   expect(acceptedRows(rows, 'alice').map((item) => item.submissionId)).toEqual(['1', '5']);
+  const stamped = (id: string, submittedAt: string | null, rawVerdict = '맞았습니다!!') => ({ ...row, submissionId: id, submittedAt, rawVerdict });
+  const since = Date.parse('2026-11-27T08:00:00.000Z');
+  expect(acceptedRows([
+    stamped('10', '2026-11-27T07:59:59.999Z'), stamped('11', '2026-11-27T08:00:00.000Z'), stamped('12', '2026-11-28T00:00:00.000Z'),
+    stamped('13', null), stamped('14', '2026-11-28T00:00:00.000Z', 'Accepted'), stamped('15', '2026-11-28T00:00:00.000Z', '틀렸습니다'),
+  ], 'alice', since).map((item) => item.submissionId)).toEqual(['11', '12', '14']);
   expect(problemTitle('<span id="problem_title"> 두 수 비교하기 </span>')).toBe('두 수 비교하기');
   expect(problemTitle('<p>login</p>')).toBeNull();
 });

@@ -303,7 +303,7 @@ fn verdict(raw: Option<&str>) -> (&'static str, &'static str) {
         {
             ("JUDGING", "JUDGING")
         }
-        "맞았습니다!!" | "ACCEPTED" => ("ACCEPTED", "JUDGED"),
+        "맞았습니다!!" | "Accepted" | "ACCEPTED" => ("ACCEPTED", "JUDGED"),
         "틀렸습니다" | "WRONG_ANSWER" => ("WRONG_ANSWER", "JUDGED"),
         "컴파일 에러" | "COMPILE_ERROR" => ("COMPILE_ERROR", "JUDGED"),
         text if text.starts_with("런타임 에러") || text == "RUNTIME_ERROR" => {
@@ -405,15 +405,47 @@ fn import(conn: &mut Connection, request: Import) -> Result<Value, StoreError> {
         return Err(invalid());
     }
     let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let enabled: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM repositories WHERE active=1 AND auto_sync=1)",
+        [],
+        |row| row.get(0),
+    )?;
+    if !enabled {
+        return Err(StoreError::new(
+            "AUTO_SYNC_DISABLED",
+            "Automatic GitHub sync is not turned on for a connected repository.",
+            false,
+        ));
+    }
     let existing = tx.query_row(
-        "SELECT problem_id=?3 AND source_code=?4 AND language=?5 FROM submissions WHERE account_context=?1 AND boj_submission_id=?2",
-        params![request.account_context, request.submission_id, request.problem_id, request.source, request.language.as_str()], |row| row.get::<_, bool>(0),
+        "SELECT id, problem_id=?3 AND source_code=?4 AND language=?5, verdict FROM submissions WHERE account_context=?1 AND boj_submission_id=?2",
+        params![request.account_context, request.submission_id, request.problem_id, request.source, request.language.as_str()],
+        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, bool>(1)?, row.get::<_, String>(2)?)),
     ).optional()?;
-    if let Some(same) = existing {
+    if let Some((existing_id, same, old_verdict)) = existing {
         if !same {
             return Err(mismatch());
         }
-        return Ok(json!({"submissionId":request.submission_id,"duplicate":true}));
+        // A submission first seen while judging is finished here with the same fields UPDATE_VERDICT sets.
+        let updated = if old_verdict != "ACCEPTED" {
+            tx.execute(
+                "UPDATE submissions SET verdict=?2, raw_verdict=?3, execution_time_ms=?4, memory_kb=?5,
+                        state=?6, updated_at=unixepoch(), revision=revision+1 WHERE id=?1",
+                params![existing_id, verdict, request.raw_verdict, request.execution_time_ms, request.memory_kb, state],
+            )?
+        } else {
+            tx.execute(
+                "UPDATE submissions SET execution_time_ms=COALESCE(execution_time_ms, ?2), memory_kb=COALESCE(memory_kb, ?3),
+                        updated_at=unixepoch(), revision=revision+1
+                 WHERE id=?1 AND ((execution_time_ms IS NULL AND ?2 IS NOT NULL) OR (memory_kb IS NULL AND ?3 IS NOT NULL))",
+                params![existing_id, request.execution_time_ms, request.memory_kb],
+            )?
+        };
+        if updated != 0 {
+            crate::git::enqueue(&tx, existing_id)?;
+        }
+        tx.commit()?;
+        return Ok(json!({"submissionId":request.submission_id,"duplicate":true,"updated":updated != 0}));
     }
     tx.execute(
         "INSERT INTO problems(id, title, url) VALUES (?1, ?2, ?3)
