@@ -10,6 +10,7 @@ assert.equal(manifest.side_panel.default_path, 'sidepanel.html');
 assert.deepEqual(manifest.permissions.sort(), ['clipboardWrite', 'nativeMessaging', 'sidePanel', 'storage']);
 const origins = ['https://acmicpc.net/*', 'https://www.acmicpc.net/*'];
 assert.deepEqual(manifest.host_permissions.sort(), origins);
+assert.deepEqual(manifest.optional_host_permissions.sort(), ['https://api.github.com/*', 'https://github.com/*']);
 assert.equal(manifest.content_scripts.length, 1);
 assert.deepEqual(manifest.content_scripts[0].matches.sort(), origins);
 for (const file of [manifest.background.service_worker, manifest.side_panel.default_path, ...manifest.content_scripts[0].js]) {

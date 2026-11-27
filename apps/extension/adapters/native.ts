@@ -12,6 +12,8 @@ export class NativeClient {
   private reconnectDelay = 100;
   private readonly pending = new Map<string, Pending>();
 
+  constructor(private readonly restoreGithubAuth?: () => Promise<unknown>) {}
+
   async request(type: string, payload: unknown): Promise<unknown> {
     const port = await this.connect();
     if (this.port !== port) throw new Error('NATIVE_HOST_DISCONNECTED');
@@ -61,6 +63,8 @@ export class NativeClient {
     try {
       const value = await this.send(port, 'HELLO', {}, 5000);
       z.object({ version: z.string(), maxFrameBytes: z.literal(maxFrameBytes), languages: z.array(z.string()) }).parse(value);
+      const auth = await this.restoreGithubAuth?.();
+      if (auth) await this.send(port, 'SET_GITHUB_AUTH', { auth }, 5000);
       if (this.port !== port) throw new Error('NATIVE_HOST_DISCONNECTED');
       this.reconnectDelay = 100;
       return port;

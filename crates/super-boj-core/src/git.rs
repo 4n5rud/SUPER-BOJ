@@ -7,7 +7,10 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -15,6 +18,7 @@ use uuid::Uuid;
 
 const MAX_RETRIES: i64 = 4;
 static STOP: AtomicBool = AtomicBool::new(false);
+static GITHUB_AUTH: Mutex<Option<GithubAuth>> = Mutex::new(None);
 
 pub fn stop_background() {
     STOP.store(true, Ordering::Relaxed);
@@ -72,6 +76,46 @@ struct Configure {
 struct Retry {
     #[serde(default)]
     allow_push: bool,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GithubAuth {
+    remote_url: String,
+    basic: String,
+    expires_at: u64,
+}
+
+fn now_seconds() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
+fn set_github_auth(auth: Option<GithubAuth>) -> Result<Value> {
+    let auth = auth
+        .map(|mut auth| {
+            let (remote, _) = github_remote(&auth.remote_url).ok_or_else(invalid)?;
+            let now = now_seconds();
+            if !remote.starts_with("https://")
+                || !(now + 1..=now + 86_400).contains(&auth.expires_at)
+                || !(20..=512).contains(&auth.basic.len())
+                || !auth
+                    .basic
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'='))
+            {
+                return Err(failure("INVALID_MESSAGE", "Invalid GitHub authorization."));
+            }
+            auth.remote_url = remote;
+            Ok(auth)
+        })
+        .transpose()?;
+    *GITHUB_AUTH
+        .lock()
+        .map_err(|_| failure("INTERNAL_ERROR", "Could not update GitHub authorization."))? = auth;
+    Ok(json!({"updated":true}))
 }
 
 struct Repository {
@@ -135,6 +179,7 @@ fn git_executable() -> Option<PathBuf> {
 struct Git {
     executable: PathBuf,
     hooks: PathBuf,
+    auth: Option<GithubAuth>,
 }
 
 struct GitOutput {
@@ -163,7 +208,21 @@ impl Git {
         {
             return Err(conflict());
         }
-        Ok(Self { executable, hooks })
+        Ok(Self {
+            executable,
+            hooks,
+            auth: None,
+        })
+    }
+
+    fn for_remote(mut self, remote: &str) -> Self {
+        self.auth = GITHUB_AUTH.lock().ok().and_then(|stored| {
+            stored
+                .as_ref()
+                .filter(|auth| auth.remote_url == remote && auth.expires_at > now_seconds())
+                .cloned()
+        });
+        self
     }
 
     fn run(&self, cwd: &Path, args: &[&str]) -> Result<GitOutput> {
@@ -235,6 +294,25 @@ impl Git {
                 "-c",
                 "user.email=test@example.invalid",
             ]);
+        }
+        if let Some(auth) = self.auth.as_ref().filter(|_| {
+            matches!(
+                args.first().copied(),
+                Some("clone" | "push" | "fetch" | "ls-remote")
+            ) && !args.contains(&"--get-url")
+        }) {
+            command
+                .env("GIT_CONFIG_COUNT", "2")
+                .env(
+                    "GIT_CONFIG_KEY_0",
+                    format!("http.{}.extraHeader", auth.remote_url),
+                )
+                .env(
+                    "GIT_CONFIG_VALUE_0",
+                    format!("Authorization: Basic {}", auth.basic),
+                )
+                .env("GIT_CONFIG_KEY_1", "credential.helper")
+                .env("GIT_CONFIG_VALUE_1", "");
         }
         command.args(args);
         let stdout = tempfile::tempfile().map_err(fs_error)?;
@@ -444,7 +522,7 @@ fn configure(db: &mut Connection, root: &Path, input: Configure) -> Result<Value
         tx.execute("UPDATE repositories SET active = 1, auto_sync = ?2, updated_at = unixepoch() WHERE id = ?1", params![id, input.auto_sync])?;
         tx
     } else {
-        let git = Git::new(root)?;
+        let git = Git::new(root)?.for_remote(&remote);
         let id = Uuid::new_v4().to_string();
         let path = root.join(&id);
         let head = clone_repository(&git, root, &remote, &input.branch, &path)?;
@@ -1085,7 +1163,10 @@ fn sync_next(db: &mut Connection, root: &Path, manual: Option<Retry>) -> Result<
     if !ready || STOP.load(Ordering::Relaxed) {
         return Ok(());
     }
-    let result = Git::new(root).and_then(|git| sync_one(db, root, &git, &repo, &job));
+    let result = Git::new(root).and_then(|git| {
+        let git = git.for_remote(&repo.remote);
+        sync_one(db, root, &git, &repo, &job)
+    });
     if let Err(error) = result {
         if STOP.load(Ordering::Relaxed) {
             return Ok(());
@@ -1109,6 +1190,15 @@ pub fn handle(kind: &str, payload: Value) -> Option<Result<Value>> {
             .map_err(|_| failure("INVALID_MESSAGE", "Invalid Git request payload."))
     }
     Some(match kind {
+        "SET_GITHUB_AUTH" => (|| {
+            #[derive(Deserialize)]
+            #[serde(deny_unknown_fields)]
+            struct Update {
+                auth: Option<GithubAuth>,
+            }
+            let update: Update = request(payload)?;
+            set_github_auth(update.auth)
+        })(),
         "CONFIGURE_REPOSITORY" => (|| {
             configure(
                 &mut open()?,

@@ -65,6 +65,11 @@ const payloads = {
   }),
   GET_ATTEMPT: z.strictObject(attempt),
   CONFIGURE_REPOSITORY: z.strictObject({ remoteUrl: z.string(), branch: z.string(), autoSync: z.boolean() }),
+  SET_GITHUB_AUTH: z.strictObject({ auth: z.strictObject({
+    remoteUrl: z.string(),
+    basic: z.string().min(20).max(512).regex(/^[A-Za-z0-9+/=]+$/),
+    expiresAt: z.number().int().positive(),
+  }).nullable() }),
   GET_GIT_STATUS: empty,
   RETRY_SYNC: z.strictObject({ allowPush: z.boolean().optional() }),
   GET_SETTINGS: empty,
@@ -72,7 +77,7 @@ const payloads = {
 };
 
 type NativeCommand = keyof typeof payloads;
-export const nativeCommandSchema = z.enum(Object.keys(payloads).filter((key) => key !== 'HELLO') as Exclude<NativeCommand, 'HELLO'>[]);
+export const nativeCommandSchema = z.enum(Object.keys(payloads).filter((key) => key !== 'HELLO' && key !== 'SET_GITHUB_AUTH') as Exclude<NativeCommand, 'HELLO' | 'SET_GITHUB_AUTH'>[]);
 export const requestSchema = z.union(Object.entries(payloads).map(([type, payload]) => z.strictObject({
   protocolVersion: z.literal(1), requestId: id, type: z.literal(type), payload,
 })));

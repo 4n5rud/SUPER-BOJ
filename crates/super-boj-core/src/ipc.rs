@@ -207,6 +207,6 @@ fn local_request(kind: &str) -> bool {
     storage::handles(kind)
         || matches!(
             kind,
-            "CONFIGURE_REPOSITORY" | "GET_GIT_STATUS" | "RETRY_SYNC"
+            "CONFIGURE_REPOSITORY" | "GET_GIT_STATUS" | "RETRY_SYNC" | "SET_GITHUB_AUTH"
         )
 }
