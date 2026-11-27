@@ -13,6 +13,7 @@
 - Service Worker가 선택한 원격 주소와 함께 `SET_GITHUB_AUTH`로 Core에 전달합니다. Core는 프로세스 메모리에만 보관합니다.
 - Core는 `clone`, `fetch`, `push`, `ls-remote`를 실행할 때만 인증을 붙입니다. 원격 주소가 일치하고 만료 전이어야 합니다.
 - 인증은 명령 인자 대신 환경 변수(`GIT_CONFIG_*`)로 해당 원격의 `http.extraHeader`에 지정하고, 그 실행에서는 사용자 자격 증명 도구를 끕니다.
+- 로그인한 사용자는 연결 화면에서 새 저장소를 만들 수 있습니다. 확장이 사용자 토큰으로 `POST /user/repos`(`auto_init:true`)를 호출해 기본 브랜치가 있는 저장소를 만든 뒤 바로 연결합니다. GitHub App에 `Administration` 쓰기 권한이 있어야 하고, 권한을 바꾸면 기존 사용자는 앱 권한을 다시 승인해야 합니다.
 - 전용 clone, 브랜치 제한, 자동 동기화 동의는 [ADR 0003](0003-managed-repository.md)을 그대로 따릅니다.
 
 ## 결과

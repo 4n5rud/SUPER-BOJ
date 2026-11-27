@@ -43,3 +43,10 @@ test('selects only the signed-in user\'s accepted rows in supported languages', 
   expect(problemTitle('<span id="problem_title"> 두 수 비교하기 </span>')).toBe('두 수 비교하기');
   expect(problemTitle('<p>login</p>')).toBeNull();
 });
+
+test('accepts only GitHub repository names that can be created', async () => {
+  Object.assign(globalThis, { __SUPER_BOJ_GITHUB_CLIENT_ID__: 'test', __SUPER_BOJ_GITHUB_APP_SLUG__: 'test' });
+  const { validRepositoryName } = await import('../adapters/github');
+  expect(['boj-solutions', 'BOJ_2026', 'a.b'].every(validRepositoryName)).toBe(true);
+  expect(['', '.', '..', 'name.git', 'has space', 'ㄱ', 'x'.repeat(101)].some(validRepositoryName)).toBe(false);
+});

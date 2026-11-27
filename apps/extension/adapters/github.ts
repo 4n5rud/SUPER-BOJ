@@ -114,3 +114,33 @@ export async function listGithubRepositories(token: string, signal: AbortSignal)
   }
   return result;
 }
+
+const repositoryName = /^[A-Za-z0-9_.-]{1,100}$/;
+const created = z.object({
+  full_name: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
+  default_branch: z.string().min(1).max(200),
+  private: z.boolean(),
+});
+
+export function validRepositoryName(name: string) {
+  return repositoryName.test(name) && name !== '.' && name !== '..' && !name.endsWith('.git');
+}
+
+/** Creates a repository under the signed-in user's account with an initial commit so the default branch exists. */
+export async function createGithubRepository(token: string, name: string, isPrivate: boolean, signal: AbortSignal): Promise<GithubRepository> {
+  if (!validRepositoryName(name)) throw new Error('저장소 이름은 영문, 숫자, -, _, . 로 100자 이내여야 합니다.');
+  const reply = await fetch('https://api.github.com/user/repos', {
+    method: 'POST',
+    headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, private: isPrivate, auto_init: true, description: 'SUPER_BOJ로 동기화한 백준 풀이' }),
+    credentials: 'omit', redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+  });
+  if (reply.status === 401) throw new Error('GitHub 로그인이 만료됐습니다. 다시 연결하세요.');
+  if (reply.status === 403 || reply.status === 404) {
+    throw new Error('GitHub App에 저장소 생성 권한이 없습니다. 앱 권한을 승인한 뒤 GitHub로 다시 연결하세요.');
+  }
+  if (reply.status === 422) throw new Error('같은 이름의 저장소가 이미 있거나 쓸 수 없는 이름입니다.');
+  if (!reply.ok) throw new Error('GitHub 저장소를 만들지 못했습니다.');
+  const repo = created.parse(await reply.json());
+  return { ...repo, archived: false, permissions: { push: true } };
+}

@@ -320,3 +320,19 @@ pre {
 .github-connect > * + * { margin-top: 8px; }
 .github-repository a, .github-repository strong { font-weight: 650; }
 .github-repository p { font-size: 12px; }
+
+.segmented {
+  display: flex;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.segmented button {
+  flex: 1;
+}
+
+.segmented button[aria-checked='true'] {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--ink);
+}
