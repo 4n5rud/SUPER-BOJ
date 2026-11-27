@@ -76,4 +76,4 @@ pnpm build
 
 <p><img src="docs/images/super-boj-mascot.png" width="144" alt="파란 망토를 두르고 앞발을 든 SUPER_BOJ 고양이 마스코트"></p>
 
-[아이콘 라이선스](docs/images/icons/LICENSE)
+바로가기에 [theSVG 아웃라인 아이콘](https://thesvg.org/ui)을 사용합니다. [MIT 라이선스](docs/images/icons/LICENSE)
