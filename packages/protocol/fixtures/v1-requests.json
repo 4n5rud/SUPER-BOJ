@@ -1,0 +1,51 @@
+[
+  {
+    "request": {"protocolVersion":1,"requestId":"8f918d3c-9d41-4944-8b07-b72eb7e4c931","type":"HELLO","payload":{}},
+    "accepted": true
+  },
+  {
+    "request": {"protocolVersion":1,"requestId":"8f918d3c-9d41-4944-8b07-b72eb7e4c932","type":"PING","payload":{}},
+    "accepted": true
+  },
+  {
+    "request": {"protocolVersion":1,"requestId":"8f918d3c-9d41-4944-8b07-b72eb7e4c933","type":"GET_SETTINGS","payload":{}},
+    "accepted": true
+  },
+  {
+    "request": {"protocolVersion":1,"requestId":"8f918d3c-9d41-4944-8b07-b72eb7e4c934","type":"CREATE_SUBMISSION_INTENT","payload":{"intentId":"b55c27ae-3f8b-4fc7-86f9-7aaa398af9d2","accountContext":null,"problemId":1000,"problemTitle":"A+B","source":"fn main() {}"}},
+    "accepted": true
+  },
+  {
+    "request": {"protocolVersion":1,"requestId":"8f918d3c-9d41-4944-8b07-b72eb7e4c935","type":"CONFIRM_SUBMISSION","payload":{"intentId":"b55c27ae-3f8b-4fc7-86f9-7aaa398af9d2","accountContext":"fixture_user","problemId":1000,"submissionId":"1234567890123456","source":"fn main() {}","submittedAt":"2026-11-26T15:23:14+09:00","rawVerdict":"맞았습니다!!","executionTimeMs":null}},
+    "accepted": true
+  },
+  {
+    "request": {"protocolVersion":1,"requestId":"8f918d3c-9d41-4944-8b07-b72eb7e4c936","type":"GET_HISTORY","payload":{"accountContext":"fixture_user","problemId":1000,"limit":30}},
+    "accepted": true
+  },
+  {
+    "request": {"protocolVersion":2,"requestId":"8f918d3c-9d41-4944-8b07-b72eb7e4c937","type":"PING","payload":{}},
+    "accepted": false,
+    "errorCode": "PROTOCOL_VERSION_MISMATCH"
+  },
+  {
+    "request": {"protocolVersion":1,"requestId":"8f918d3c-9d41-4944-8b07-b72eb7e4c938","type":"RUN","payload":{"jobId":"40dda542-f3a7-4734-a276-52b9a187ff1c","language":"rust","source":"fn main() {}","runTimeoutMs":3001}},
+    "accepted": false,
+    "errorCode": "INVALID_MESSAGE"
+  },
+  {
+    "request": {"protocolVersion":1,"requestId":"8f918d3c-9d41-4944-8b07-b72eb7e4c939","type":"RUN_TESTS","payload":{"jobId":"40dda542-f3a7-4734-a276-52b9a187ff1c","language":"rust","source":"","cases":[]}},
+    "accepted": false,
+    "errorCode": "INVALID_MESSAGE"
+  },
+  {
+    "request": {"protocolVersion":1,"requestId":"8f918d3c-9d41-4944-8b07-b72eb7e4c93a","type":"CONFIRM_SUBMISSION","payload":{"intentId":"b55c27ae-3f8b-4fc7-86f9-7aaa398af9d2","accountContext":"fixture_user","problemId":1000,"submissionId":"../../attempt","source":"fn main() {}"}},
+    "accepted": false,
+    "errorCode": "INVALID_MESSAGE"
+  },
+  {
+    "request": {"protocolVersion":1,"requestId":"8f918d3c-9d41-4944-8b07-b72eb7e4c93b","type":"GET_ATTEMPT","payload":{"accountContext":"fixture_user","submissionId":"1234567890123456","source":"unexpected"}},
+    "accepted": false,
+    "errorCode": "INVALID_MESSAGE"
+  }
+]

@@ -1,0 +1,11 @@
+{
+  "name": "super-boj",
+  "private": true,
+  "packageManager": "pnpm@11.10.0",
+  "scripts": {
+    "typecheck": "pnpm --filter @super-boj/extension typecheck",
+    "lint": "pnpm --filter @super-boj/extension lint",
+    "test": "pnpm --filter @super-boj/extension test",
+    "build": "pnpm --filter @super-boj/extension build"
+  }
+}
