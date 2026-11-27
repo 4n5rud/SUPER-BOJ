@@ -30,3 +30,12 @@ pnpm build
 ## 릴리즈 빌드
 
 `Pre-alpha artifacts` 워크플로는 수동 실행 또는 `v*` 태그 푸시로 실행됩니다. OS별 CI와 확장 CI를 통과한 상태에서 바이너리, 확장 ZIP, 설치 스크립트 ZIP을 생성하고 SHA-256 검사를 수행합니다. 결과는 실행 화면의 Actions 아티팩트에 저장됩니다. Chrome Web Store 배포에는 스토어 계정과 별도 검수가 필요합니다.
+
+## GitHub 로그인 빌드 설정
+
+확장을 빌드할 때 아래 환경 변수를 주면 GitHub 로그인이 켜집니다. 값이 없으면 로그인 화면을 숨깁니다. 두 값 모두 공개해도 되는 식별자이며, 클라이언트 비밀값은 사용하지 않습니다.
+
+- `SUPER_BOJ_GITHUB_CLIENT_ID`: GitHub App의 Client ID
+- `SUPER_BOJ_GITHUB_APP_SLUG`: GitHub App의 URL 이름(저장소 추가 링크에 사용)
+
+GitHub App에는 Device Flow를 켜고 저장소 내용의 쓰기 권한을 줍니다. 릴리스 워크플로는 같은 이름의 저장소 변수를 읽습니다. 실제 App으로는 아직 확인하지 않았습니다.

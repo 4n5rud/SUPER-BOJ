@@ -14,15 +14,15 @@
 {"protocolVersion":1,"requestId":"55c6f721-b304-4a89-a4b5-5a2a746baa90","type":"RESPONSE","ok":true,"payload":{"status":"PONG"}}
 ```
 
-오류 응답은 `ok:false`와 `error.code`, `error.message`, `error.retryable`을 전달합니다. 연결 시작 시 `HELLO`로 버전과 언어를 확인합니다. stdout은 프레임에만 사용합니다.
+오류 응답은 `ok:false`와 `error.code`, `error.message`, `error.retryable`을 전달합니다. 연결 시작 시 `HELLO`로 버전과 언어를 확인합니다. `HELLO` 응답의 `languages`는 `["rust","c","cpp","python","java"]`입니다. stdout은 프레임에만 사용합니다.
 
 응답에 다른 정수 프로토콜 버전이 있으면 확장은 `PROTOCOL_VERSION_MISMATCH`로 연결을 종료합니다. 연결이 끊기면 대기 중인 요청을 실패 처리합니다. 이후 새 요청을 받으면 100ms부터 최대 2초까지 지수적으로 대기한 뒤 다시 연결하며, `HELLO` 성공 시 대기 시간을 초기화합니다.
 
 | 메시지 | Payload |
 | --- | --- |
 | `HELLO`, `PING`, `GET_TOOLCHAINS` | 빈 객체 |
-| `RUN` | `jobId`, `language:"rust"`, `source`, 선택적 `stdin`, `compileTimeoutMs`, `runTimeoutMs` |
-| `RUN_TESTS` | `jobId`, `language:"rust"`, `source`, `cases`의 `input` 및 선택적 `expectedOutput`, 선택적 타임아웃 |
+| `RUN` | `jobId`, `language`, `source`, 선택적 `stdin`, `compileTimeoutMs`, `runTimeoutMs` |
+| `RUN_TESTS` | `jobId`, `language`, `source`, `cases`의 `input` 및 선택적 `expectedOutput`, 선택적 타임아웃 |
 | `CANCEL` | `jobId` |
 | `CREATE_SUBMISSION_INTENT` | `intentId`, `accountContext`, `problemId`, `problemTitle`, `source` |
 | `CONFIRM_SUBMISSION` | `intentId`, `submissionId`, `accountContext`, `problemId`, `source`, 선택적 `rawVerdict`, `executionTimeMs`, `memoryKb`, `submittedAt` |
@@ -31,12 +31,30 @@
 | `GET_HISTORY` | `accountContext`, 선택적 `problemId`, `before`, `limit` |
 | `GET_ATTEMPT` | `accountContext`, `submissionId` |
 | `CONFIGURE_REPOSITORY` | `remoteUrl`, `branch`, `autoSync` |
+| `SET_GITHUB_AUTH` | `auth`: `null` 또는 `{remoteUrl, basic, expiresAt}` |
 | `GET_GIT_STATUS` | 빈 객체 |
 | `RETRY_SYNC` | 선택적 `allowPush` |
 | `GET_SETTINGS` | 빈 객체 |
 | `UPDATE_SETTINGS` | `verdictWaitSeconds` (0–86,400) |
 
 요청 제한은 실행 전체에 적용됩니다. 소스 최대 256 KiB, stdin 최대 64 KiB, stdout과 stderr 각각 최대 64 KiB입니다. JSON 직렬화 결과가 프레임 한도를 넘으면 오류를 반환합니다. 컴파일은 최대 30초, 테스트 케이스별 실행은 최대 3초입니다. 여러 케이스를 요청하면 한 번 컴파일한 뒤 각 케이스를 실행하고 완료된 결과를 반환합니다.
+
+## 실행 언어
+
+`language`는 `rust`, `c`, `cpp`, `python`, `java` 중 하나입니다. `GET_TOOLCHAINS`는 `{toolchains: [{language, available, path, version}]}`을 반환합니다. 도구를 찾지 못한 언어는 `path`와 `version` 없이 `available:false`입니다. 그 언어를 실행하면 `status:"TOOLCHAIN_NOT_FOUND"`를 반환합니다. 언어별 명령은 [실행 언어 결정](decisions/0007-language-profiles.md)에 있습니다.
+
+제출 준비와 확인 요청에는 `language` 항목이 없습니다. 확장은 Rust를 선택했을 때만 제출을 준비합니다.
+
+## GitHub 인증 전달
+
+`SET_GITHUB_AUTH`는 확장의 Service Worker만 보냅니다. 사이드 패널이 요청할 수 있는 명령 목록에는 없습니다.
+
+- `remoteUrl`: `https://github.com/OWNER/REPO` 형식의 원격 주소
+- `basic`: `x-access-token:<토큰>`의 Base64 문자열(20–512자)
+- `expiresAt`: 만료 시각(Unix epoch 초). 현재 이후 24시간 이내여야 합니다.
+- `auth:null`: 보관 중인 인증을 지웁니다.
+
+성공하면 `{updated:true}`를, 검증에 실패하면 `INVALID_MESSAGE` 오류를 반환합니다. 호스트에 다시 연결하면 확장은 `HELLO` 다음에 보관 중인 인증을 다시 보냅니다. 자세한 보관 범위는 [GitHub 로그인 결정](decisions/0006-github-device-login.md)에 있습니다.
 
 ## 제출 및 이력 응답
 
