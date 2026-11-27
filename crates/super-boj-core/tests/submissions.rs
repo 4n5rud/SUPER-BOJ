@@ -159,3 +159,61 @@ fn database_symlink_is_rejected_without_breaking_ping() {
     assert_eq!(host.ok("PING", json!({}))["status"], "PONG");
     assert_eq!(outside.as_file().metadata().unwrap().len(), 0);
 }
+
+#[test]
+fn records_each_language_and_rejects_cross_language_linking() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut host = Host::start(dir.path());
+    for (index, language) in ["rust", "c", "cpp", "python", "java"]
+        .into_iter()
+        .enumerate()
+    {
+        let id = Uuid::new_v4();
+        let submission = (100 + index).to_string();
+        let mut preparation = json!({
+            "intentId": id, "accountContext": "alice", "problemId": 1000,
+            "problemTitle": "A+B", "source": "same bytes", "language": language,
+        });
+        host.ok("CREATE_SUBMISSION_INTENT", preparation.clone());
+        assert_eq!(
+            host.ok("CREATE_SUBMISSION_INTENT", preparation.clone())["intentId"],
+            id.to_string()
+        );
+        let other = if language == "rust" { "c" } else { "rust" };
+        preparation["language"] = json!(other);
+        assert_eq!(
+            host.request("CREATE_SUBMISSION_INTENT", preparation)["error"]["code"],
+            "SUBMISSION_MISMATCH"
+        );
+        let pending = json!({"accountContext": "alice", "problemId": 1000, "language": other});
+        assert_eq!(
+            host.ok("GET_PENDING_INTENTS", pending)["intents"],
+            json!([])
+        );
+        let pending = json!({"accountContext": "alice", "problemId": 1000, "language": language});
+        assert_eq!(
+            host.ok("GET_PENDING_INTENTS", pending)["intents"][0]["intentId"],
+            id.to_string()
+        );
+
+        let mut confirmation = json!({
+            "intentId": id, "accountContext": "alice", "problemId": 1000,
+            "submissionId": submission, "source": "same bytes", "language": other,
+        });
+        assert_eq!(
+            host.request("CONFIRM_SUBMISSION", confirmation.clone())["error"]["code"],
+            "SUBMISSION_MISMATCH"
+        );
+        confirmation["language"] = json!(language);
+        assert_eq!(
+            host.ok("CONFIRM_SUBMISSION", confirmation)["duplicate"],
+            false
+        );
+        let attempt = host.ok(
+            "GET_ATTEMPT",
+            json!({"accountContext": "alice", "submissionId": submission}),
+        );
+        assert_eq!(attempt["language"], language);
+        assert_eq!(attempt["source"], "same bytes");
+    }
+}

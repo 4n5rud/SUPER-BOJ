@@ -35,7 +35,16 @@ pnpm build
 
 확장을 빌드할 때 아래 환경 변수를 주면 GitHub 로그인이 켜집니다. 값이 없으면 로그인 화면을 숨깁니다. 두 값 모두 공개해도 되는 식별자이며, 클라이언트 비밀값은 사용하지 않습니다.
 
+기본 빌드는 공식 [SUPER-BOJ GitHub App](https://github.com/apps/super-boj)의 공개 Client ID와 앱 이름을 사용합니다. 별도 GitHub App으로 테스트할 때는 아래 두 값을 함께 지정합니다.
+
 - `SUPER_BOJ_GITHUB_CLIENT_ID`: GitHub App의 Client ID
 - `SUPER_BOJ_GITHUB_APP_SLUG`: GitHub App의 URL 이름(저장소 추가 링크에 사용)
 
 GitHub App에는 Device Flow를 켜고 저장소 내용의 쓰기 권한을 줍니다. 릴리스 워크플로는 같은 이름의 저장소 변수를 읽습니다. 실제 App으로는 아직 확인하지 않았습니다.
+
+
+## 웹 스토어용 Core 배포
+
+Chrome 웹 스토어 개발자 대시보드에서 확인한 32자 확장 ID를 GitHub Actions 저장소 변수 `SUPER_BOJ_STORE_EXTENSION_ID`로 설정합니다. 릴리스 워크플로는 이 ID로 각 설치 파일의 Native Messaging 허용 대상을 고정하고 확장 빌드에 같은 값을 전달합니다. 설치 링크는 이 ID로 실행되는 확장에 표시됩니다. `v*` 태그 빌드가 성공하면 결과물이 GitHub Release에 올라갑니다. 작업 실행으로 패키지를 먼저 만들어 비공개 테스트에 사용할 수 있습니다.
+
+공개 배포 전 macOS 설치 파일의 서명과 공증, Windows 설치 파일의 서명, 각 운영체제의 새 Chrome 프로필에서 설치 및 자동 연결을 확인합니다.

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { authorizeGithub, githubAppUrl, githubClientId, githubOrigins, listGithubRepositories, readGithubSession, type GithubRepository } from '../../adapters/github';
+import { authorizeGithub, githubAppUrl, githubClientId, listGithubRepositories, readGithubSession, requestGithubPermissions, type GithubRepository } from '../../adapters/github';
 
 type Props = { online: boolean; onConnected: (value: unknown) => void; report: (message: string) => void };
 
@@ -31,7 +31,7 @@ export function GithubConnect({ online, onConnected, report }: Props) {
     setBusy(true);
     setCode('');
     try {
-      if (!await chrome.permissions.request({ origins: githubOrigins })) throw new Error('GitHub 연결 권한을 허용하세요.');
+      if (!await requestGithubPermissions()) throw new Error('GitHub 연결 권한을 허용하세요.');
       const session = await authorizeGithub(setCode, controller.signal);
       const rows = await listGithubRepositories(session.token, controller.signal);
       await chrome.storage.session.set({ githubSession: session });
@@ -80,9 +80,10 @@ export function GithubConnect({ online, onConnected, report }: Props) {
     }
   }
 
-  return <div className="record">
-    <div className="toolbar"><button className="primary" disabled={busy} onClick={() => void connect()}>
-      {repositories ? 'GitHub 다시 연결' : 'GitHub 연결'}
+  return <div className="github-connect">
+    <div className="toolbar"><button className="primary github-login" disabled={!online || busy} onClick={() => void connect()}>
+      <span className="brand-icon" aria-hidden="true" />
+      {repositories ? 'GitHub 다시 연결' : 'GitHub로 연결'}
     </button>
     {repositories && <button disabled={busy} onClick={() => void signOut()}>로그아웃</button>}
     {code && <button onClick={() => operation.current?.abort()}>취소</button>}</div>
@@ -98,7 +99,7 @@ export function GithubConnect({ online, onConnected, report }: Props) {
         {repositories.map((row) => <option key={row.full_name} value={row.full_name}>{row.full_name}{row.private ? ' (비공개)' : ''}</option>)}
       </select></label>
       <label className="check"><input type="checkbox" checked={autoSync} onChange={(event) => setAutoSync(event.target.checked)} /> 확인한 제출을 자동 동기화</label>
-      <button disabled={busy || !repository || !online}>선택한 저장소 연결</button>
+      <button disabled={busy || !repository || !online}>저장소 연결</button>
     </form>}
   </div>;
 }

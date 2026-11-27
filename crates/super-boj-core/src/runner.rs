@@ -25,9 +25,10 @@ pub struct Run {
     run_timeout_ms: Option<u64>,
 }
 
-#[derive(Clone, Copy, Deserialize, serde::Serialize)]
+#[derive(Clone, Copy, Default, Deserialize, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Language {
+    #[default]
     Rust,
     C,
     Cpp,
@@ -44,6 +45,16 @@ pub const LANGUAGES: [Language; 5] = [
 ];
 
 impl Language {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Rust => "rust",
+            Self::C => "c",
+            Self::Cpp => "cpp",
+            Self::Python => "python",
+            Self::Java => "java",
+        }
+    }
+
     fn tools(self) -> Option<(PathBuf, Option<PathBuf>)> {
         let (programs, runtime): (&[&str], Option<PathBuf>) = match self {
             Self::Rust => (&["rustc"], None),
@@ -60,7 +71,7 @@ impl Language {
         Some((programs.iter().find_map(|name| executable(name))?, runtime))
     }
 
-    fn filename(self) -> &'static str {
+    pub fn filename(self) -> &'static str {
         match self {
             Self::Rust => "main.rs",
             Self::C => "Main.c",

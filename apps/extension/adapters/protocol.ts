@@ -40,6 +40,7 @@ const payloads = {
     intentId: id,
     accountContext: account.nullish(),
     problemId,
+    language: languageSchema.optional(),
     problemTitle: boundedString(512).refine((title) => title.trim().length > 0),
     source,
   }),
@@ -47,6 +48,7 @@ const payloads = {
     ...attempt,
     intentId: id,
     problemId,
+    language: languageSchema.optional(),
     source,
     rawVerdict: unknownVerdict.nullish(),
     executionTimeMs,
@@ -56,7 +58,7 @@ const payloads = {
   UPDATE_VERDICT: z.strictObject({
     ...attempt, rawVerdict: unknownVerdict, executionTimeMs, memoryKb,
   }),
-  GET_PENDING_INTENTS: z.strictObject({ accountContext: account.nullish(), problemId }),
+  GET_PENDING_INTENTS: z.strictObject({ accountContext: account.nullish(), problemId, language: languageSchema.optional() }),
   GET_HISTORY: z.strictObject({
     accountContext: account,
     problemId: problemId.nullish(),

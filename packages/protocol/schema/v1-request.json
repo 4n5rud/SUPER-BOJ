@@ -369,6 +369,16 @@
               "minimum": 1,
               "maximum": 4294967295
             },
+            "language": {
+              "type": "string",
+              "enum": [
+                "rust",
+                "c",
+                "cpp",
+                "python",
+                "java"
+              ]
+            },
             "problemTitle": {
               "type": "string",
               "maxLength": 512
@@ -431,6 +441,16 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 4294967295
+            },
+            "language": {
+              "type": "string",
+              "enum": [
+                "rust",
+                "c",
+                "cpp",
+                "python",
+                "java"
+              ]
             },
             "source": {
               "type": "string",
@@ -609,6 +629,16 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 4294967295
+            },
+            "language": {
+              "type": "string",
+              "enum": [
+                "rust",
+                "c",
+                "cpp",
+                "python",
+                "java"
+              ]
             }
           },
           "required": [

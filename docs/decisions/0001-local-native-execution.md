@@ -15,3 +15,8 @@ Chrome Side Panel과 Native Messaging을 사용합니다. Rust 호스트는 표�
 Chrome 세션과 로컬 저장소의 수명은 다릅니다. 중요한 상태는 SQLite 또는 Chrome Storage에 적시에 저장합니다. 실행 중인 자식 프로세스 정리는 OS별로 검증합니다. 별도의 설치 절차를 통해 Chrome Native Host와 정확한 확장 ID를 연결합니다.
 
 [Chrome Native Messaging](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging)
+
+
+## 웹 스토어 설치 동선
+
+Chrome 웹 스토어 확장 ID를 빌드 변수로 지정해 OS별 Core 설치 패키지에 고정합니다. 확장은 실행 중인 자신의 ID와 빌드에 지정된 ID가 일치할 때 설치 링크를 표시합니다. OS 설치 프로그램이 Core와 호스트 등록을 담당합니다. macOS와 Debian 계열 Linux 패키지는 시스템 등록 경로를 쓰며 Windows는 현재 사용자의 레지스트리에 등록합니다. 이 경로에서도 사용자별 초안, SQLite, 관리 전용 Git clone은 기존 위치를 사용합니다. 패널을 처음 열거나 Chrome으로 돌아오면 확장이 연결을 확인합니다.

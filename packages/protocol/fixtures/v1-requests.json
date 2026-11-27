@@ -47,5 +47,22 @@
     "request": {"protocolVersion":1,"requestId":"8f918d3c-9d41-4944-8b07-b72eb7e4c93b","type":"GET_ATTEMPT","payload":{"accountContext":"fixture_user","submissionId":"1234567890123456","source":"unexpected"}},
     "accepted": false,
     "errorCode": "INVALID_MESSAGE"
+  },
+  {
+    "request": {"protocolVersion":1,"requestId":"8f918d3c-9d41-4944-8b07-b72eb7e4c93c","type":"CREATE_SUBMISSION_INTENT","payload":{"intentId":"b55c27ae-3f8b-4fc7-86f9-7aaa398af9d3","accountContext":"fixture_user","problemId":1000,"problemTitle":"A+B","source":"print(3)","language":"python"}},
+    "accepted": true
+  },
+  {
+    "request": {"protocolVersion":1,"requestId":"8f918d3c-9d41-4944-8b07-b72eb7e4c93d","type":"GET_PENDING_INTENTS","payload":{"accountContext":"fixture_user","problemId":1000,"language":"python"}},
+    "accepted": true
+  },
+  {
+    "request": {"protocolVersion":1,"requestId":"8f918d3c-9d41-4944-8b07-b72eb7e4c93e","type":"CONFIRM_SUBMISSION","payload":{"intentId":"b55c27ae-3f8b-4fc7-86f9-7aaa398af9d3","accountContext":"fixture_user","problemId":1000,"submissionId":"456","source":"print(3)","language":"python"}},
+    "accepted": true
+  },
+  {
+    "request": {"protocolVersion":1,"requestId":"8f918d3c-9d41-4944-8b07-b72eb7e4c93f","type":"GET_PENDING_INTENTS","payload":{"accountContext":"fixture_user","problemId":1000,"language":"kotlin"}},
+    "accepted": false,
+    "errorCode": "INVALID_MESSAGE"
   }
 ]

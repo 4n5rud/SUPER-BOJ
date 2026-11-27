@@ -1,5 +1,11 @@
 # Native Core 설치와 제거
 
+Chrome 웹 스토어에서 설치한 확장은 처음 실행할 때 OS에 맞는 Core 다운로드를 제공합니다. 설치 파일을 열어 실행한 뒤 Chrome으로 돌아오면 확장이 연결을 확인합니다. 선택한 언어의 컴파일러와 인터프리터는 Core와 별도로 설치합니다.
+
+릴리스 설치 파일은 macOS arm64·Intel용 `.pkg`, Windows x64용 `.exe`, Ubuntu 24.04 등 glibc 2.39 이상 Debian 계열 Linux x64용 `.deb`입니다. macOS와 Linux 패키지는 시스템에 Chrome Native Messaging 호스트를 등록하므로 설치 시 OS 승인이 필요합니다. Windows 설치 파일은 현재 사용자 계정에 등록합니다. 설치 파일의 서명 및 출시 환경 검증이 완료되기 전에는 개발용 수동 설치를 사용합니다.
+
+## 개발용 수동 설치
+
 GitHub Actions의 `super-boj-pre-alpha` 아티팩트에는 Chrome ZIP, 설치 스크립트 ZIP, 운영체제 및 CPU별 바이너리, `SHA256SUMS`가 들어갑니다. 소스에서 직접 빌드한 경우 아래 바이너리 인수에 `target/release/super-boj-core` 또는 `target/release/super-boj-core.exe`를 지정합니다.
 
 다운로드한 파일의 SHA-256을 `SHA256SUMS`와 비교합니다. Linux에서는 `sha256sum -c SHA256SUMS`, macOS에서는 `shasum -a 256 -c SHA256SUMS`, Windows에서는 `Get-FileHash -Algorithm SHA256 -LiteralPath <파일>`로 확인할 수 있습니다.

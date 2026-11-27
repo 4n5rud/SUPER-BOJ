@@ -48,6 +48,38 @@ jobs:
           cargo +stable build --locked --release --target "$TARGET"
           mkdir dist
           cp "target/$TARGET/release/super-boj-core$SUFFIX" "dist/$ASSET"
+      - name: Build macOS or Linux installer
+        if: vars.SUPER_BOJ_STORE_EXTENSION_ID != '' && runner.os != 'Windows'
+        shell: bash
+        env:
+          STORE_ID: ${{ vars.SUPER_BOJ_STORE_EXTENSION_ID }}
+          TARGET: ${{ matrix.target }}
+          ASSET: ${{ matrix.asset }}
+        run: |
+          set -euo pipefail
+          SUPER_BOJ_CORE_VERSION="$(cargo pkgid --locked -p super-boj-core | cut -d '#' -f 2)"
+          export SUPER_BOJ_CORE_VERSION
+          case "$RUNNER_OS" in
+            macOS) platform=macos; extension=pkg ;;
+            Linux) platform=linux; extension=deb ;;
+          esac
+          bash installers/package-unix.sh "$platform" "$STORE_ID" "target/$TARGET/release/super-boj-core" \
+            "dist/${ASSET/super-boj-core/super-boj-setup}.$extension"
+      - name: Build Windows installer
+        if: vars.SUPER_BOJ_STORE_EXTENSION_ID != '' && runner.os == 'Windows'
+        shell: pwsh
+        env:
+          SUPER_BOJ_STORE_EXTENSION_ID: ${{ vars.SUPER_BOJ_STORE_EXTENSION_ID }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          if ($env:SUPER_BOJ_STORE_EXTENSION_ID -cnotmatch '^[a-p]{32}$') { throw 'Invalid Chrome Web Store ID' }
+          $env:SUPER_BOJ_CORE_VERSION = (cargo pkgid --locked -p super-boj-core).Split('#')[-1]
+          $env:SUPER_BOJ_CORE_BINARY = (Resolve-Path "target/$env:TARGET/release/super-boj-core.exe").Path
+          $env:SUPER_BOJ_INSTALLER_OUTPUT = (Resolve-Path dist).Path
+          choco install innosetup -y --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installers/windows/setup.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.asset }}
@@ -69,6 +101,7 @@ jobs:
         env:
           SUPER_BOJ_GITHUB_CLIENT_ID: ${{ vars.SUPER_BOJ_GITHUB_CLIENT_ID }}
           SUPER_BOJ_GITHUB_APP_SLUG: ${{ vars.SUPER_BOJ_GITHUB_APP_SLUG }}
+          SUPER_BOJ_STORE_EXTENSION_ID: ${{ vars.SUPER_BOJ_STORE_EXTENSION_ID }}
           SUPER_BOJ_EXTENSION_KEY: ${{ vars.SUPER_BOJ_EXTENSION_KEY }}
       - run: |
           mkdir dist
@@ -97,3 +130,23 @@ jobs:
           name: super-boj-pre-alpha
           path: dist/
           if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v') && vars.SUPER_BOJ_STORE_EXTENSION_ID != ''
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: super-boj-pre-alpha
+          path: dist
+      - name: Publish setup files for the tagged version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" --verify-tag --generate-notes dist/*

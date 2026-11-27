@@ -6,8 +6,9 @@
 
 ## 결정
 
-확장이 GitHub App의 Device Flow로 접근 토큰을 받습니다. 빌드에는 공개 Client ID만 넣습니다.
+확장이 GitHub App의 Device Flow로 접근 토큰을 받습니다. 기본 배포 빌드에는 공식 [SUPER-BOJ GitHub App](https://github.com/apps/super-boj)의 공개 Client ID와 설치 링크용 앱 이름을 넣습니다. 테스트용 앱은 빌드 환경 변수로 지정할 수 있습니다.
 
+- 매니페스트와 런타임은 GitHub 인증과 API에 필요한 HTTPS 호스트 두 개를 공통 모듈에서 가져옵니다. 기존 두 호스트만 허용하는 빌드 검사를 두고, 사이드패널은 클릭 시 로드된 매니페스트를 확인한 뒤 Chrome에 선택 권한 동의를 요청합니다.
 - 토큰은 `chrome.storage.session`에만 둡니다. GitHub가 만료 시간을 주지 않으면 8시간으로 간주합니다.
 - Service Worker가 선택한 원격 주소와 함께 `SET_GITHUB_AUTH`로 Core에 전달합니다. Core는 프로세스 메모리에만 보관합니다.
 - Core는 `clone`, `fetch`, `push`, `ls-remote`를 실행할 때만 인증을 붙입니다. 원격 주소가 일치하고 만료 전이어야 합니다.

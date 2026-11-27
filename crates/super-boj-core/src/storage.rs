@@ -1,3 +1,4 @@
+use crate::runner::Language;
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Row, TransactionBehavior};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -124,6 +125,8 @@ const MIGRATIONS: &[&str] = &[
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Prepare {
+    #[serde(default)]
+    language: Language,
     intent_id: Uuid,
     account_context: Option<String>,
     problem_id: u32,
@@ -134,6 +137,8 @@ struct Prepare {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Confirm {
+    #[serde(default)]
+    language: Language,
     intent_id: Uuid,
     account_context: String,
     problem_id: u32,
@@ -158,6 +163,8 @@ struct VerdictUpdate {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Problem {
+    #[serde(default)]
+    language: Language,
     account_context: Option<String>,
     problem_id: u32,
 }
@@ -201,7 +208,7 @@ fn unverified() -> StoreError {
 fn mismatch() -> StoreError {
     StoreError::new(
         "SUBMISSION_MISMATCH",
-        "The submitted source, account, or problem differs from the prepared snapshot.",
+        "The submitted source, language, account, or problem differs from the prepared snapshot.",
         false,
     )
 }
@@ -254,13 +261,13 @@ fn prepare(conn: &mut Connection, request: Prepare) -> Result<Value, StoreError>
     )?;
     let inserted = tx.execute(
         "INSERT INTO submission_intents(id, account_context, problem_id, language, source_code, source_hash, status)
-         VALUES (?1, ?2, ?3, 'rust', ?4, ?5, 'PREPARED') ON CONFLICT(id) DO NOTHING",
-        params![id, request.account_context, request.problem_id, request.source, digest],
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'PREPARED') ON CONFLICT(id) DO NOTHING",
+        params![id, request.account_context, request.problem_id, request.language.as_str(), request.source, digest],
     )?;
     if inserted == 0 {
         let same: bool = tx.query_row(
-            "SELECT account_context IS ?2 AND problem_id=?3 AND source_code=?4 FROM submission_intents WHERE id=?1",
-            params![id, request.account_context, request.problem_id, request.source], |row| row.get(0),
+            "SELECT account_context IS ?2 AND problem_id=?3 AND source_code=?4 AND language=?5 FROM submission_intents WHERE id=?1",
+            params![id, request.account_context, request.problem_id, request.source, request.language.as_str()], |row| row.get(0),
         )?;
         if !same {
             return Err(mismatch());
@@ -312,16 +319,16 @@ fn confirm(conn: &mut Connection, request: Confirm) -> Result<Value, StoreError>
     let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let id = request.intent_id.to_string();
     let matches = tx.query_row(
-        "SELECT (account_context IS NULL OR account_context=?2) AND problem_id=?3 AND source_code=?4 AND status!='CANCELLED'
+        "SELECT (account_context IS NULL OR account_context=?2) AND problem_id=?3 AND source_code=?4 AND language=?5 AND status!='CANCELLED'
          FROM submission_intents WHERE id=?1",
-        params![id, request.account_context, request.problem_id, request.source], |row| row.get::<_, bool>(0),
+        params![id, request.account_context, request.problem_id, request.source, request.language.as_str()], |row| row.get::<_, bool>(0),
     ).optional()?.ok_or_else(unverified)?;
     if !matches {
         return Err(mismatch());
     }
     let existing = tx.query_row(
-        "SELECT problem_id=?3 AND source_code=?4 FROM submissions WHERE account_context=?1 AND boj_submission_id=?2",
-        params![request.account_context, request.submission_id, request.problem_id, request.source], |row| row.get::<_, bool>(0),
+        "SELECT problem_id=?3 AND source_code=?4 AND language=?5 FROM submissions WHERE account_context=?1 AND boj_submission_id=?2",
+        params![request.account_context, request.submission_id, request.problem_id, request.source, request.language.as_str()], |row| row.get::<_, bool>(0),
     ).optional()?;
     if let Some(same) = existing {
         if !same {
@@ -401,9 +408,9 @@ fn pending(conn: &Connection, request: Problem) -> Result<Value, StoreError> {
     let mut stmt = conn.prepare(
         "SELECT id, source_hash, created_at FROM submission_intents
          WHERE problem_id=?1 AND (account_context IS NULL OR account_context=?2)
-           AND status IN ('PREPARED','AWAITING_CONFIRMATION','UNVERIFIED') ORDER BY created_at DESC, rowid DESC LIMIT 50",
+           AND language=?3 AND status IN ('PREPARED','AWAITING_CONFIRMATION','UNVERIFIED') ORDER BY created_at DESC, rowid DESC LIMIT 50",
     )?;
-    let intents = stmt.query_map(params![request.problem_id, request.account_context], |row| {
+    let intents = stmt.query_map(params![request.problem_id, request.account_context, request.language.as_str()], |row| {
         Ok(json!({"intentId":row.get::<_, String>(0)?,"sourceHash":row.get::<_, String>(1)?,"createdAt":row.get::<_, i64>(2)?}))
     })?.collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(json!({"intents":intents}))

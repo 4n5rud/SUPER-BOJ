@@ -593,6 +593,7 @@ struct Job {
     problem_id: i64,
     submission: String,
     source: String,
+    filename: String,
     revision: i64,
     metadata: String,
     synced_revision: i64,
@@ -604,17 +605,22 @@ struct Job {
 }
 
 fn next_job(db: &Connection, repo: &Repository) -> Result<Option<Job>> {
+    use crate::runner::Language;
     Ok(db.query_row(
-        "SELECT j.id, s.problem_id, s.boj_submission_id, s.source_code, s.revision,
+        "WITH filenames(language, filename) AS (
+            VALUES ('rust',?2), ('c',?3), ('cpp',?4), ('python',?5), ('java',?6)
+         )
+         SELECT j.id, s.problem_id, s.boj_submission_id, s.source_code, s.revision,
                 json_object('schemaVersion',1,'problemId',s.problem_id,'problemTitle',p.title,
                   'problemUrl',p.url,'submissionId',s.boj_submission_id,'language',s.language,
                   'attemptNumber',(SELECT count(*) FROM submissions a WHERE a.problem_id=s.problem_id
                       AND a.account_context=s.account_context AND a.id <= s.id),
                   'verdict',CASE WHEN s.verdict IN ('WAITING','JUDGING') THEN 'UNKNOWN' ELSE s.verdict END,
                   'rawVerdict',s.raw_verdict,'executionTimeMs',s.execution_time_ms,'memoryKb',s.memory_kb,
-                  'submittedAt',s.submitted_at,'sourceFile','main.rs','sourceHash',s.source_hash),
-                j.synced_revision,j.working_revision,j.working_metadata,j.commit_sha,j.pushed_sha,j.retry_count
+                  'submittedAt',s.submitted_at,'sourceFile',f.filename,'sourceHash',s.source_hash),
+                j.synced_revision,j.working_revision,j.working_metadata,j.commit_sha,j.pushed_sha,j.retry_count,f.filename
          FROM sync_jobs j JOIN submissions s ON s.id=j.submission_id JOIN problems p ON p.id=s.problem_id
+         LEFT JOIN filenames f ON f.language=s.language
          WHERE j.repository_id=?1 AND (
              j.working_revision IS NOT NULL OR (
                j.status IN ('PENDING','RETRY_WAIT') AND j.next_retry_at <= unixepoch()
@@ -623,12 +629,13 @@ fn next_job(db: &Connection, repo: &Repository) -> Result<Option<Job>> {
                  ) <= unixepoch())
              ))
          ORDER BY j.working_revision IS NULL, j.id LIMIT 1",
-        [&repo.id],
+        params![repo.id, Language::Rust.filename(), Language::C.filename(), Language::Cpp.filename(),
+            Language::Python.filename(), Language::Java.filename()],
         |row| Ok(Job {
             id:row.get(0)?,problem_id:row.get(1)?,submission:row.get(2)?,source:row.get(3)?,
             revision:row.get(4)?,metadata:row.get(5)?,synced_revision:row.get(6)?,
             working_revision:row.get(7)?,working_metadata:row.get(8)?,commit:row.get(9)?,
-            pushed_sha:row.get(10)?,retries:row.get(11)?,
+            pushed_sha:row.get(10)?,retries:row.get(11)?,filename:row.get(12)?,
         }),
     ).optional()?)
 }
@@ -725,7 +732,7 @@ fn job_paths(repo: &Repository, job: &Job) -> Result<(String, String)> {
         }
     }
     Ok((
-        format!("{directory}/main.rs"),
+        format!("{directory}/{}", job.filename),
         format!("{directory}/metadata.json"),
     ))
 }
@@ -1300,14 +1307,24 @@ mod tests {
         }
 
         fn attempt(&mut self, id: i64, verdict: &str) {
+            self.attempt_with_language(id, verdict, crate::runner::Language::Rust, "fn main() {}");
+        }
+
+        fn attempt_with_language(
+            &mut self,
+            id: i64,
+            verdict: &str,
+            language: crate::runner::Language,
+            source: &str,
+        ) {
             let tx = self.db.transaction().unwrap();
             let intent = format!("intent-{id}");
-            let hash = crate::storage::hash("fn main() {}");
+            let hash = crate::storage::hash(source);
             tx.execute("INSERT INTO submission_intents(id,account_context,problem_id,language,source_code,source_hash,status)
-                        VALUES (?1,'user',1000,'rust','fn main() {}',?2,'CONFIRMED')", params![intent,hash]).unwrap();
+                        VALUES (?1,'user',1000,?2,?3,?4,'CONFIRMED')", params![intent,language.as_str(),source,hash]).unwrap();
             tx.execute("INSERT INTO submissions(id,intent_id,account_context,problem_id,boj_submission_id,language,source_code,
-                        source_hash,verdict,state) VALUES (?1,?2,'user',1000,?3,'rust','fn main() {}',?4,?5,'JUDGED')",
-                params![id,intent,id.to_string(),hash,verdict]).unwrap();
+                        source_hash,verdict,state) VALUES (?1,?2,'user',1000,?3,?4,?5,?6,?7,'JUDGED')",
+                params![id,intent,id.to_string(),language.as_str(),source,hash,verdict]).unwrap();
             enqueue(&tx, id).unwrap();
             tx.commit().unwrap();
         }
@@ -1333,6 +1350,32 @@ mod tests {
                 .text()
                 .parse()
                 .unwrap()
+        }
+    }
+
+    #[test]
+    fn sync_uses_the_source_filename_for_each_language() {
+        let mut fixture = Fixture::new();
+        for (index, (language, filename)) in crate::runner::LANGUAGES
+            .into_iter()
+            .zip(["main.rs", "Main.c", "Main.cc", "Main.py", "Main.java"])
+            .enumerate()
+        {
+            let id = 10001 + index as i64;
+            let source = format!("source for {}", language.as_str());
+            fixture.attempt_with_language(id, "ACCEPTED", language, &source);
+            fixture.sync();
+            assert_eq!(fixture.staged(id).0, "PUSHED");
+            let directory = fixture.repo.join(format!("BOJ/1000/attempts/{id}"));
+            assert_eq!(
+                fs::read_to_string(directory.join(filename)).unwrap(),
+                source
+            );
+            let metadata: Value =
+                serde_json::from_slice(&fs::read(directory.join("metadata.json")).unwrap())
+                    .unwrap();
+            assert_eq!(metadata["language"], language.as_str());
+            assert_eq!(metadata["sourceFile"], filename);
         }
     }
 

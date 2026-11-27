@@ -1,3 +1,4 @@
+import type { Language } from './protocol';
 import { z } from 'zod';
 
 export const matches = ['https://www.acmicpc.net/*', 'https://acmicpc.net/*'] as const;
@@ -82,4 +83,17 @@ export function parseStatus(document: Document, location: string): Status[] | nu
     });
     return parsed.success ? [parsed.data] : [];
   });
+}
+
+
+export function submissionLanguage(label: string): Language | undefined {
+  switch (label.trim().toLowerCase()) {
+    case 'rust':
+    case 'rust 2021': return 'rust';
+    case 'c11': return 'c';
+    case 'c++17': return 'cpp';
+    case 'python 3': return 'python';
+    case 'java 11': return 'java';
+    default: return undefined;
+  }
 }

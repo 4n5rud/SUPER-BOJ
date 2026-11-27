@@ -24,10 +24,10 @@
 | `RUN` | `jobId`, `language`, `source`, 선택적 `stdin`, `compileTimeoutMs`, `runTimeoutMs` |
 | `RUN_TESTS` | `jobId`, `language`, `source`, `cases`의 `input` 및 선택적 `expectedOutput`, 선택적 타임아웃 |
 | `CANCEL` | `jobId` |
-| `CREATE_SUBMISSION_INTENT` | `intentId`, `accountContext`, `problemId`, `problemTitle`, `source` |
-| `CONFIRM_SUBMISSION` | `intentId`, `submissionId`, `accountContext`, `problemId`, `source`, 선택적 `rawVerdict`, `executionTimeMs`, `memoryKb`, `submittedAt` |
+| `CREATE_SUBMISSION_INTENT` | `intentId`, `accountContext`, `problemId`, `problemTitle`, `source`, 선택적 `language` |
+| `CONFIRM_SUBMISSION` | `intentId`, `submissionId`, `accountContext`, `problemId`, `source`, 선택적 `language`, `rawVerdict`, `executionTimeMs`, `memoryKb`, `submittedAt` |
 | `UPDATE_VERDICT` | `accountContext`, `submissionId`, `rawVerdict`, 선택적 `executionTimeMs`, `memoryKb` |
-| `GET_PENDING_INTENTS` | `accountContext`, `problemId` |
+| `GET_PENDING_INTENTS` | `accountContext`, `problemId`, 선택적 `language` |
 | `GET_HISTORY` | `accountContext`, 선택적 `problemId`, `before`, `limit` |
 | `GET_ATTEMPT` | `accountContext`, `submissionId` |
 | `CONFIGURE_REPOSITORY` | `remoteUrl`, `branch`, `autoSync` |
@@ -43,7 +43,7 @@
 
 `language`는 `rust`, `c`, `cpp`, `python`, `java` 중 하나입니다. `GET_TOOLCHAINS`는 `{toolchains: [{language, available, path, version}]}`을 반환합니다. 도구를 찾지 못한 언어는 `path`와 `version` 없이 `available:false`입니다. 그 언어를 실행하면 `status:"TOOLCHAIN_NOT_FOUND"`를 반환합니다. 언어별 명령은 [실행 언어 결정](decisions/0007-language-profiles.md)에 있습니다.
 
-제출 준비와 확인 요청에는 `language` 항목이 없습니다. 확장은 Rust를 선택했을 때만 제출을 준비합니다.
+제출 준비, 준비 기록 조회, 제출 확인은 같은 `language`를 사용합니다. 기존 v1 요청과의 호환을 위해 생략하면 `rust`로 처리합니다. Rust 외 제출 연결에는 확장과 로컬 Core를 함께 업데이트해야 합니다. Core는 요청 언어가 준비 기록과 일치하는지 확인합니다.
 
 ## GitHub 인증 전달
 

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { githubOrigins } from './github-origins';
 
 declare const __SUPER_BOJ_GITHUB_CLIENT_ID__: string;
 declare const __SUPER_BOJ_GITHUB_APP_SLUG__: string;
@@ -7,7 +8,24 @@ export const githubClientId = __SUPER_BOJ_GITHUB_CLIENT_ID__;
 export const githubAppUrl = /^[a-z0-9-]+$/.test(__SUPER_BOJ_GITHUB_APP_SLUG__)
   ? `https://github.com/apps/${__SUPER_BOJ_GITHUB_APP_SLUG__}/installations/new`
   : undefined;
-export const githubOrigins = ['https://github.com/*', 'https://api.github.com/*'];
+const reloadExtension = 'chrome://extensions에서 SUPER_BOJ를 최신 빌드(apps/extension/.output/chrome-mv3)로 다시 로드한 뒤 사이드패널을 닫았다가 다시 여세요.';
+
+export async function requestGithubPermissions() {
+  try {
+    const declaredOrigins = chrome.runtime?.id && chrome.runtime.getManifest().optional_host_permissions;
+    const missingOrigins = githubOrigins.filter((origin) => !declaredOrigins || !declaredOrigins.includes(origin));
+    if (missingOrigins.length) {
+      throw new Error(`현재 확장에 GitHub 권한 선언이 없습니다 (${missingOrigins.join(', ')}). ${reloadExtension}`);
+    }
+
+    return await chrome.permissions.request({ origins: [...githubOrigins] });
+  } catch (error) {
+    if (error instanceof Error && /Only permissions specified in the manifest may be requested|Extension context invalidated/i.test(error.message)) {
+      throw new Error(`Chrome이 현재 확장 컨텍스트의 GitHub 권한 요청을 처리하지 못했습니다. ${reloadExtension}`);
+    }
+    throw error;
+  }
+}
 export const githubSessionSchema = z.strictObject({
   token: z.string().regex(/^[A-Za-z0-9_]{20,255}$/),
   expiresAt: z.number().int().positive(),
