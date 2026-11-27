@@ -101,6 +101,32 @@ fn ping_and_compile_over_native_messaging() {
 }
 
 #[test]
+fn core_language_profiles_execute_when_their_tools_are_installed() {
+    let mut host = Host::start();
+    let tools = host.request("GET_TOOLCHAINS", json!({}));
+    for (language, source) in [
+        ("c", "#include <stdio.h>\nint main(void) { int a,b; if (scanf(\"%d%d\",&a,&b)!=2) return 1; printf(\"%d\\n\",a+b); }"),
+        ("cpp", "#include <iostream>\nint main() { int a,b; std::cin>>a>>b; std::cout<<a+b<<'\\n'; }"),
+        ("python", "a,b=map(int,input().split())\nprint(a+b)"),
+        ("java", "import java.util.Scanner; public class Main { public static void main(String[] args) { Scanner s=new Scanner(System.in); System.out.println(s.nextInt()+s.nextInt()); } }"),
+    ] {
+        let profile = tools["toolchains"].as_array().unwrap().iter()
+            .find(|item| item["language"] == language).expect(language);
+        let result = host.request("RUN", json!({
+            "jobId": Uuid::new_v4(), "language": language, "source": source, "stdin": "1 2\n"
+        }));
+        if profile["available"] == true {
+            assert_eq!(result["status"], "COMPLETED", "{language}: {result}");
+            // C, C++, Python and Java emit CRLF line endings on Windows.
+            let stdout = result["stdout"].as_str().unwrap().replace("\r\n", "\n");
+            assert_eq!(stdout, "3\n", "{language}");
+        } else {
+            assert_eq!(result["status"], "TOOLCHAIN_NOT_FOUND", "{language}: {result}");
+        }
+    }
+}
+
+#[test]
 fn rejects_invalid_frame_sizes_and_partial_frames() {
     for frame in [
         0_u32.to_ne_bytes().to_vec(),

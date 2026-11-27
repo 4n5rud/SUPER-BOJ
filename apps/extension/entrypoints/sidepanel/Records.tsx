@@ -2,6 +2,8 @@ import { useEffect, useState, type RefObject } from 'react';
 import { z } from 'zod';
 import { type Problem, type Status } from '../../adapters/boj';
 import { callNative } from '../../adapters/native';
+import { githubClientId } from '../../adapters/github';
+import { GithubConnect } from './GithubConnect';
 
 type Report = (message: string) => void;
 const intentSchema = z.object({ intentId: z.uuid(), sourceHash: z.string(), createdAt: z.number().int().optional() });
@@ -206,14 +208,17 @@ export function History({ problem, report, restore }: { problem: Problem | null;
   </section>;
 }
 
-export function Git({ report }: { report: Report }) {
+export function Git({ report, online, openSetup }: { report: Report; online: boolean; openSetup: () => void }) {
   const [status, setStatus] = useState<z.infer<typeof statusReply>>();
   const [remoteUrl, setRemote] = useState('');
   const [branch, setBranch] = useState('main');
   const [autoSync, setAuto] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
+    if (!online) return;
     let active = true;
     void callNative('GET_GIT_STATUS', {}, statusReply).then((value) => {
       if (!active) return;
@@ -223,29 +228,45 @@ export function Git({ report }: { report: Report }) {
         setBranch(value.repository.branch);
         setAuto(value.repository.autoSync);
       }
-    }).catch((error: unknown) => { if (active) report(String(error)); });
+    }).catch(() => { if (active) setLoadFailed(true); });
     return () => { active = false; };
-  }, [report]);
+  }, [online, report]);
 
   async function action(command: string, payload: unknown) {
     setBusy(true);
-    try { setStatus(await callNative(command, payload, statusReply)); }
+    try {
+      const value = await callNative(command, payload, statusReply);
+      setStatus(value);
+      setLoadFailed(false);
+      if (command === 'CONFIGURE_REPOSITORY') setEditing(false);
+    }
     catch (error) { report(String(error)); }
     finally { setBusy(false); }
   }
 
   return <section><h2>GitHub 동기화</h2>
-    <p>연결 전에 Git Credential Manager 또는 SSH 인증을 준비하세요. 공개 저장소로 푸시하면 제출 소스도 공개됩니다.</p>
-    <form onSubmit={(event) => {
+    <GithubConnect online={online} report={report} onConnected={(value) => setStatus(statusReply.parse(value))} />
+    {!online && <><p>GitHub 저장소에 제출을 보내려면 로컬 연결이 필요합니다.</p>
+      <button onClick={openSetup}>연결 설정</button></>}
+    {online && !status && (loadFailed
+      ? <><p role="status">연결 상태를 확인할 수 없습니다.</p>
+        <button disabled={busy} onClick={() => void action('GET_GIT_STATUS', {})}>다시 확인</button></>
+      : <p role="status">연결 상태 확인 중</p>)}
+    {online && !!status && (!status.repository || editing) && <details open={!githubClientId || editing}>
+      <summary>저장소 주소로 연결</summary><form onSubmit={(event) => {
       event.preventDefault();
       void action('CONFIGURE_REPOSITORY', { remoteUrl, branch, autoSync });
     }}>
       <label>GitHub 저장소 URL<input value={remoteUrl} onChange={(event) => setRemote(event.target.value)} required placeholder="https://github.com/owner/repo" /></label>
-      <label>브랜치<input value={branch} onChange={(event) => setBranch(event.target.value)} required /></label>
-      <label className="check"><input type="checkbox" checked={autoSync} onChange={(event) => setAuto(event.target.checked)} /> 이 저장소에 제출을 자동 푸시하는 데 동의합니다.</label>
-      <button className="primary" disabled={busy}>연결 설정 저장</button>
-    </form>
-    {status && <article className="record">
+      <details open={status.repository && branch !== 'main' ? true : undefined}><summary>브랜치 설정</summary>
+        <label>브랜치<input value={branch} onChange={(event) => setBranch(event.target.value)} required /></label>
+      </details>
+      <label className="check"><input type="checkbox" checked={autoSync} onChange={(event) => setAuto(event.target.checked)} /> 확인한 제출을 이 저장소로 자동 동기화</label>
+      <p className="muted">공개 저장소를 연결하면 동기화된 코드도 공개됩니다.</p>
+      <button className="primary" disabled={busy}>저장소 연결</button>
+      {editing && <button type="button" disabled={busy} onClick={() => setEditing(false)}>취소</button>}
+    </form></details>}
+    {online && status && <article className="record">
       <p>{status.available ? 'Git 감지됨' : 'Git 설치 필요'} · {
         { UNVERIFIED: '인증 확인 전', READ_VERIFIED: '읽기 확인됨', WRITE_VERIFIED: '푸시 확인됨', FAILED: '인증 실패' }[status.authentication]
       }</p>
@@ -255,7 +276,14 @@ export function Git({ report }: { report: Report }) {
       {status.lastCommit && <pre>{status.lastCommit}</pre>}
       {status.lastSyncAt && <p>마지막 동기화 {status.lastSyncAt}</p>}
       {status.lastError && <p className="notice">{status.lastError}</p>}
-      <div className="toolbar"><button disabled={busy} onClick={() => void action('GET_GIT_STATUS', {})}>새로고침</button>
+      <div className="toolbar">{status.repository && !editing && <button disabled={busy} onClick={() => {
+        if (!status.repository) return;
+        setRemote(status.repository.remoteUrl);
+        setBranch(status.repository.branch);
+        setAuto(status.repository.autoSync);
+        setEditing(true);
+      }}>연결 변경</button>}
+        <button disabled={busy} onClick={() => void action('GET_GIT_STATUS', {})}>새로고침</button>
         <button disabled={busy || !status.repository} onClick={() => {
           if (status.repository?.autoSync || window.confirm('이 저장소에 대기 중인 제출을 푸시할까요?')) {
             void action('RETRY_SYNC', { allowPush: true });

@@ -117,7 +117,13 @@
             },
             "language": {
               "type": "string",
-              "const": "rust"
+              "enum": [
+                "rust",
+                "c",
+                "cpp",
+                "python",
+                "java"
+              ]
             },
             "source": {
               "type": "string",
@@ -197,7 +203,13 @@
             },
             "language": {
               "type": "string",
-              "const": "rust"
+              "enum": [
+                "rust",
+                "c",
+                "cpp",
+                "python",
+                "java"
+              ]
             },
             "source": {
               "type": "string",
@@ -763,6 +775,72 @@
             "remoteUrl",
             "branch",
             "autoSync"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "requestId",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
+        },
+        "type": {
+          "type": "string",
+          "const": "SET_GITHUB_AUTH"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "auth": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "remoteUrl": {
+                      "type": "string"
+                    },
+                    "basic": {
+                      "type": "string",
+                      "minLength": 20,
+                      "maxLength": 512,
+                      "pattern": "^[A-Za-z0-9+/=]+$"
+                    },
+                    "expiresAt": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "remoteUrl",
+                    "basic",
+                    "expiresAt"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "auth"
           ],
           "additionalProperties": false
         }

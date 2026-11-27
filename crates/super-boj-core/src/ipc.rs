@@ -130,10 +130,10 @@ pub async fn serve() -> anyhow::Result<()> {
                             "PING" if request.payload == json!({}) => success(id,json!({"status":"PONG"})),
                             "HELLO" if request.payload == json!({}) => {
                                 connected = true;
-                                success(id,json!({"version":env!("CARGO_PKG_VERSION"),"maxFrameBytes":MAX_FRAME,"languages":["rust"]}))
+                                success(id,json!({"version":env!("CARGO_PKG_VERSION"),"maxFrameBytes":MAX_FRAME,"languages":runner::LANGUAGES}))
                             }
                             "GET_TOOLCHAINS" if request.payload == json!({}) && tasks.len() < 4 => {
-                                tasks.spawn(async move { (false, success(id,json!({"toolchains":[runner::toolchain().await]}))) });
+                                tasks.spawn(async move { (false, success(id,json!({"toolchains":runner::toolchains().await}))) });
                                 continue;
                             }
                             "RUN" | "RUN_TESTS" if active.is_some() => error(Some(id),"RUN_BUSY","Another job is running.",true),
@@ -207,6 +207,6 @@ fn local_request(kind: &str) -> bool {
     storage::handles(kind)
         || matches!(
             kind,
-            "CONFIGURE_REPOSITORY" | "GET_GIT_STATUS" | "RETRY_SYNC"
+            "CONFIGURE_REPOSITORY" | "GET_GIT_STATUS" | "RETRY_SYNC" | "SET_GITHUB_AUTH"
         )
 }

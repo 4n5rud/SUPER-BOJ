@@ -67,6 +67,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
         env:
+          SUPER_BOJ_GITHUB_CLIENT_ID: ${{ vars.SUPER_BOJ_GITHUB_CLIENT_ID }}
+          SUPER_BOJ_GITHUB_APP_SLUG: ${{ vars.SUPER_BOJ_GITHUB_APP_SLUG }}
           SUPER_BOJ_EXTENSION_KEY: ${{ vars.SUPER_BOJ_EXTENSION_KEY }}
       - run: |
           mkdir dist
