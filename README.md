@@ -1,37 +1,31 @@
-# SUPER_BOJ
+<h1><img src="docs/images/super-boj-logo.png" width="560" alt="SUPER_BOJ"></h1>
 
-**백준 문제 옆에 나만의 에디터를 열고, 제출 기록을 GitHub에 모아보세요.**
+백준 문제 옆에서 코드를 작성하고 로컬에서 테스트하는 Chrome 확장 프로그램입니다. 확인한 제출의 소스와 채점 결과를 보관하고, 연결한 GitHub 저장소에 동기화할 수 있습니다. 현재 Pre-alpha 버전입니다.
 
-SUPER_BOJ는 백준을 풀 때 사용하는 Chrome 확장 프로그램입니다. 사이드 패널에서 초안을 작성하고, 제출한 풀이와 채점 결과를 다시 볼 수 있습니다.
-
-- **에디터**에서 작성한 코드가 자동 저장됩니다. 패널을 열면 바로 편집을 시작할 수 있습니다.
-- **제출 이력**에서는 확인한 제출을 하나씩 보존합니다. 같은 문제에 여러 번 도전해도 이전 소스가 남습니다.
-- **GitHub**에서 저장소를 연결하고 자동 동기화를 켜면 확인한 제출이 그 저장소에 기록됩니다.
-
-현재는 Pre-alpha 버전입니다. 확장 빌드와 설치는 아래 순서로 진행합니다. 로컬 실행, 제출 이력 연결, GitHub 동기화에는 로컬 연결 도구가 필요합니다.
+- <a href="#소스에서-설치하기"><img src="docs/images/icons/terminal.svg" width="14" height="14" alt=""> 소스에서 설치</a>
+- <a href="#사용-방법"><img src="docs/images/icons/list.svg" width="14" height="14" alt=""> 사용 방법</a>
+- <a href="docs/GIT_SYNC.md"><img src="docs/images/icons/branch.svg" width="14" height="14" alt=""> GitHub 연결</a>
+- <a href="#검증-방법"><img src="docs/images/icons/check.svg" width="14" height="14" alt=""> 설치 확인</a>
 
 ## 소스에서 설치하기
 
-소스에서 확장을 빌드하려면 Chrome 116 이상, Node.js 24 이상, 프로젝트에서 지정한 pnpm이 필요합니다.
+Chrome 116 이상, Node.js 24 이상, `package.json`에 지정된 pnpm이 필요합니다.
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm build
 ```
 
-Chrome에서 `chrome://extensions`를 열고 개발자 모드를 켭니다. **압축해제된 확장 프로그램을 로드합니다**를 선택해 `apps/extension/.output/chrome-mv3` 폴더를 지정합니다. macOS 폴더 선택 창에서 `.output`이 숨겨져 있으면 **⌘ + ⇧ + .**을 누릅니다.
+1. Chrome에서 `chrome://extensions`를 열고 **개발자 모드**를 켭니다.
+2. **압축해제된 확장 프로그램을 로드합니다**를 선택하고 `apps/extension/.output/chrome-mv3`를 지정합니다. macOS에서 `.output`이 보이지 않으면 **⌘ + ⇧ + .**을 누릅니다.
+3. 로컬 테스트, 제출 연결, GitHub 동기화를 사용하려면 로컬 연결 도구를 설치합니다. 소스 빌드에는 Rust stable이 필요합니다. 설치 후 패널의 **설정**에서 **로컬 실행** 항목의 **연결 테스트**를 누릅니다. [운영체제별 설치](docs/INSTALLATION.md)
 
 ## 사용 방법
 
-1. 백준 문제를 열고 SUPER_BOJ 아이콘을 클릭합니다. **에디터**에서 초안을 작성하거나 복사할 수 있습니다.
-2. **제출 준비**를 누르면 코드가 복사되고 공식 백준 제출 화면이 열립니다. 거기서 붙여넣고 직접 제출한 뒤, 채점 현황이나 제출 ID로 실제 제출을 연결합니다. **제출 이력**에서 소스와 채점 결과를 확인할 수 있습니다. [백준 제출 연동](docs/BOJ_INTEGRATION.md)
-3. **GitHub**에서 저장소 주소를 입력하고 **저장소 연결**을 누릅니다. 원하는 경우 자동 동기화를 켭니다. 공개 저장소를 연결하면 동기화된 코드도 공개됩니다. [GitHub 연결과 인증](docs/GIT_SYNC.md)
-
-### 로컬 실행과 동기화 활성화
-
-패널의 **설정 → 로컬 실행**에서 설치 방법을 열거나, 운영체제에 맞는 설치 절차를 따르세요. 소스에서 연결 도구를 빌드할 때는 Rust stable이 필요합니다. 설치한 뒤 패널에서 **연결 테스트**를 누릅니다. [운영체제별 설치](docs/INSTALLATION.md)
-
-로컬 실행은 현재 Rust를 지원합니다. **테스트 케이스**를 펼치면 백준 예제나 직접 입력한 테스트를 실행할 수 있습니다. 실행 코드는 사용자 계정 권한으로 동작하므로 직접 작성하고 신뢰하는 코드만 실행하세요. [보안 범위](docs/SECURITY.md)
+1. **초안 작성.** 백준 문제 페이지에서 SUPER_BOJ 아이콘을 누릅니다. **에디터**에서 언어를 선택하고 코드를 입력하면 초안이 자동으로 저장됩니다.
+2. **로컬 테스트.** **전체 실행**을 누르거나 **테스트 케이스**를 열어 예제와 사용자 입력을 개별 실행합니다. 선택한 언어의 컴파일러나 인터프리터가 필요합니다. 실행 코드는 사용자 계정 권한으로 동작하므로 직접 작성하고 신뢰하는 코드만 실행합니다. 지원 범위와 실행 권한은 [언어 프로필](docs/decisions/0007-language-profiles.md)과 [보안 문서](docs/SECURITY.md)를 참고합니다.
+3. **제출과 이력 연결.** Rust에서 **제출 준비**를 누른 뒤 공식 백준 제출 화면에 붙여넣고 직접 제출합니다. 채점 현황에서 제출을 선택하거나 제출 ID로 연결하면 **제출 이력**에서 소스와 채점 결과를 확인할 수 있습니다. [백준 제출 연동](docs/BOJ_INTEGRATION.md)
+4. **GitHub 동기화.** **GitHub**에서 저장소 주소와 브랜치를 지정하거나, 로그인 기능이 켜진 빌드에서는 **GitHub 연결**로 저장소를 선택합니다. 자동 동기화는 동의한 뒤 활성화됩니다. 공개 저장소와 동기화하면 소스와 메타데이터가 공개됩니다. [GitHub 연결과 인증](docs/GIT_SYNC.md)
 
 ## 검증 방법
 
@@ -79,3 +73,7 @@ pnpm build
 - [IPC 프로토콜](docs/IPC_PROTOCOL.md)
 - [기여 안내](CONTRIBUTING.md)
 - [MIT 라이선스](LICENSE)
+
+<p><img src="docs/images/super-boj-mascot.png" width="144" alt="파란 망토를 두르고 앞발을 든 SUPER_BOJ 고양이 마스코트"></p>
+
+문서 아이콘은 Brachio의 SVG를 사용합니다. [아이콘 라이선스](docs/images/icons/LICENSE)
