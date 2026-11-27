@@ -25,10 +25,83 @@ pub struct Run {
     run_timeout_ms: Option<u64>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Copy, Deserialize, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
-enum Language {
+pub enum Language {
     Rust,
+    C,
+    Cpp,
+    Python,
+    Java,
+}
+
+pub const LANGUAGES: [Language; 5] = [
+    Language::Rust,
+    Language::C,
+    Language::Cpp,
+    Language::Python,
+    Language::Java,
+];
+
+impl Language {
+    fn tools(self) -> Option<(PathBuf, Option<PathBuf>)> {
+        let (programs, runtime): (&[&str], Option<PathBuf>) = match self {
+            Self::Rust => (&["rustc"], None),
+            Self::C => (&["gcc-11", "gcc", "clang"], None),
+            Self::Cpp => (&["g++-11", "g++", "clang++"], None),
+            Self::Python => (&["python3.13", "python3"], None),
+            Self::Java => {
+                let compiler = executable("javac")?;
+                let runtime =
+                    compiler.with_file_name(if cfg!(windows) { "java.exe" } else { "java" });
+                return runtime.is_file().then_some((compiler, Some(runtime)));
+            }
+        };
+        Some((programs.iter().find_map(|name| executable(name))?, runtime))
+    }
+
+    fn filename(self) -> &'static str {
+        match self {
+            Self::Rust => "main.rs",
+            Self::C => "Main.c",
+            Self::Cpp => "Main.cc",
+            Self::Python => "Main.py",
+            Self::Java => "Main.java",
+        }
+    }
+
+    fn compiler_arguments(self, binary: &std::path::Path) -> Vec<std::ffi::OsString> {
+        let mut arguments: Vec<_> = match self {
+            Self::Rust => vec!["--edition=2021", "-O", self.filename(), "-o"],
+            Self::C | Self::Cpp => vec![
+                self.filename(),
+                "-O2",
+                "-Wall",
+                if matches!(self, Self::C) {
+                    "-std=gnu11"
+                } else {
+                    "-std=gnu++17"
+                },
+                "-DONLINE_JUDGE",
+                "-DBOJ",
+                "-lm",
+                "-o",
+            ],
+            Self::Python => vec!["-W", "ignore", "-m", "py_compile", self.filename()],
+            Self::Java => vec!["--release", "11", "-encoding", "UTF-8", self.filename()],
+        }
+        .into_iter()
+        .map(std::ffi::OsString::from)
+        .collect();
+        if self.native_binary() {
+            arguments.push(binary.into());
+        }
+        arguments
+    }
+
+    fn native_binary(self) -> bool {
+        matches!(self, Self::Rust | Self::C | Self::Cpp)
+    }
 }
 
 #[derive(Deserialize)]
@@ -62,12 +135,23 @@ impl Run {
     }
 }
 
-fn compiler() -> Option<PathBuf> {
-    let executable = if cfg!(windows) { "rustc.exe" } else { "rustc" };
+fn executable(program: &str) -> Option<PathBuf> {
+    let executable = if cfg!(windows) {
+        format!("{program}.exe")
+    } else {
+        program.to_owned()
+    };
     let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" });
-    std::env::var_os("PATH")
-        .iter()
-        .flat_map(std::env::split_paths)
+    let java = (program == "javac")
+        .then(|| std::env::var_os("JAVA_HOME"))
+        .flatten()
+        .map(|path| PathBuf::from(path).join("bin"));
+    java.into_iter()
+        .chain(
+            std::env::var_os("PATH")
+                .iter()
+                .flat_map(std::env::split_paths),
+        )
         .chain(home.map(|path| PathBuf::from(path).join(".cargo/bin")))
         .chain(
             [
@@ -79,7 +163,7 @@ fn compiler() -> Option<PathBuf> {
             .map(PathBuf::from),
         )
         .filter(|path| path.is_absolute())
-        .map(|dir| dir.join(executable))
+        .map(|dir| dir.join(&executable))
         .find(|file| file.is_file())
 }
 
@@ -106,21 +190,41 @@ fn command(path: PathBuf, directory: &std::path::Path) -> Command {
 }
 
 pub async fn toolchain() -> Value {
-    let Some(path) = compiler() else {
-        return json!({"language":"rust","available":false});
+    probe(Language::Rust).await
+}
+
+pub async fn toolchains() -> Vec<Value> {
+    let mut results = Vec::with_capacity(LANGUAGES.len());
+    for language in LANGUAGES {
+        results.push(probe(language).await);
+    }
+    results
+}
+
+async fn probe(language: Language) -> Value {
+    let Some((path, _)) = language.tools() else {
+        return json!({"language":language,"available":false});
     };
-    let cwd = tempfile::tempdir().ok();
-    let Some(cwd) = cwd else {
-        return json!({"language":"rust","available":false});
+    let Ok(cwd) = tempfile::tempdir() else {
+        return json!({"language":language,"available":false,"path":path});
     };
     let mut cmd = command(path.clone(), cwd.path());
-    cmd.arg("--version");
+    cmd.arg(if matches!(language, Language::Java) {
+        "-version"
+    } else {
+        "--version"
+    });
     let (_cancel, receiver) = watch::channel(false);
     match execute(cmd, String::new(), 3000, receiver).await {
         Ok(result) if result.success => {
-            json!({"language":"rust","available":true,"path":path,"version":result.stdout.trim()})
+            let version = if result.stdout.is_empty() {
+                &result.stderr
+            } else {
+                &result.stdout
+            };
+            json!({"language":language,"available":true,"path":path,"version":version.lines().next()})
         }
-        _ => json!({"language":"rust","available":false,"path":path}),
+        _ => json!({"language":language,"available":false,"path":path}),
     }
 }
 
@@ -350,24 +454,19 @@ mod macos_tests {
 
 pub async fn run(request: Run, cancel: watch::Receiver<bool>) -> Result<Value> {
     let id = request.job_id;
-    let Some(rustc) = compiler() else {
+    let Some((compiler, runtime)) = request.language.tools() else {
         return Ok(json!({"jobId":id,"status":"TOOLCHAIN_NOT_FOUND"}));
     };
     let directory = tempfile::Builder::new().prefix("super-boj-").tempdir()?;
-    let filename = match request.language {
-        Language::Rust => "main.rs",
-    };
+    let filename = request.language.filename();
     std::fs::write(directory.path().join(filename), request.source)?;
     let binary = directory.path().join(if cfg!(windows) {
         "solution.exe"
     } else {
         "solution"
     });
-    let mut compile = command(rustc, directory.path());
-    compile
-        .arg(filename)
-        .args(["--edition=2021", "-o"])
-        .arg(&binary);
+    let mut compile = command(compiler.clone(), directory.path());
+    compile.args(request.language.compiler_arguments(&binary));
     let compiled = execute(
         compile,
         String::new(),
@@ -388,7 +487,9 @@ pub async fn run(request: Run, cancel: watch::Receiver<bool>) -> Result<Value> {
         );
     }
     #[cfg(target_os = "macos")]
-    prepare_compiler_output(&binary)?;
+    if request.language.native_binary() {
+        prepare_compiler_output(&binary)?;
+    }
     let multiple = request.cases.is_some();
     let cases = request.cases.unwrap_or_else(|| {
         vec![Case {
@@ -398,8 +499,33 @@ pub async fn run(request: Run, cancel: watch::Receiver<bool>) -> Result<Value> {
     });
     let mut results = Vec::new();
     for case in cases {
+        let mut run = match request.language {
+            Language::Python => {
+                let mut cmd = command(compiler.clone(), directory.path());
+                cmd.args(["-W", "ignore", filename]);
+                cmd
+            }
+            Language::Java => {
+                let mut cmd = command(
+                    runtime.clone().context("missing Java runtime")?,
+                    directory.path(),
+                );
+                cmd.args([
+                    "-Dfile.encoding=UTF-8",
+                    "-XX:+UseSerialGC",
+                    "-DONLINE_JUDGE=1",
+                    "-DBOJ=1",
+                    "-cp",
+                    ".",
+                    "Main",
+                ]);
+                cmd
+            }
+            _ => command(binary.clone(), directory.path()),
+        };
+        run.env("NO_COLOR", "1");
         let outcome = execute(
-            command(binary.clone(), directory.path()),
+            run,
             case.input,
             request.run_timeout_ms.unwrap_or(3000),
             cancel.clone(),

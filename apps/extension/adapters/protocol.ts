@@ -14,9 +14,11 @@ const unknownVerdict = boundedString(256);
 const executionTimeMs = u32.nullish();
 const memoryKb = u32.nullish();
 const empty = z.strictObject({});
+export const languageSchema = z.enum(['rust', 'c', 'cpp', 'python', 'java']);
+export type Language = z.infer<typeof languageSchema>;
 const run = {
   jobId: id,
-  language: z.literal('rust'),
+  language: languageSchema,
   source,
   stdin: input.optional(),
   compileTimeoutMs: z.number().int().min(1).max(30_000).nullish(),
