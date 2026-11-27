@@ -57,34 +57,64 @@ export const statusSchema = z.object({
 
 export type Status = z.infer<typeof statusSchema>;
 
+const statusColumns = {
+  id: ['제출 번호', 'Submission #'],
+  user: ['아이디', 'User'],
+  problem: ['문제', '문제번호', '문제 번호', 'Problem'],
+  verdict: ['결과', 'Result'],
+  memory: ['메모리', 'Memory'],
+  time: ['시간', 'Time'],
+  language: ['언어', 'Language'],
+  submitted: ['제출시간', '제출한 시간', 'Submitted'],
+};
+
 export function parseStatus(document: Document, location: string): Status[] | null {
   const url = siteUrl(location);
-  if (url?.pathname !== '/status' || url.searchParams.has('contest_id')) return null;
-  const table = document.querySelector('#status-table');
+  if (!url || !['/status', '/status/'].includes(url.pathname) || url.searchParams.has('contest_id')) return null;
+  const table = document.querySelector<HTMLTableElement>('#status-table');
   if (!table) throw new Error('BOJ_PARSING_FAILED');
-  const number = (cell: HTMLTableCellElement) => {
-    const value = cell.textContent?.trim() ?? '';
+  const headers = Array.from(table.tHead?.rows[0]?.cells ?? [], (cell) => cell.textContent?.trim().replace(/\s*\([^)]*\)$/, '') ?? '');
+  const column = (key: keyof typeof statusColumns, fallback: number) =>
+    headers.length ? headers.findIndex((header) => statusColumns[key].includes(header)) : fallback;
+  const idIndex = column('id', 0);
+  const userIndex = column('user', 1);
+  const problemIndex = column('problem', 2);
+  const verdictIndex = column('verdict', 3);
+  const languageIndex = column('language', 7);
+  const memoryIndex = column('memory', 4);
+  const timeIndex = column('time', 5);
+  const submittedIndex = column('submitted', 9);
+  if ([idIndex, userIndex, problemIndex, verdictIndex, languageIndex].some((index) => index < 0)) {
+    throw new Error('BOJ_PARSING_FAILED');
+  }
+
+  const number = (cell?: HTMLTableCellElement) => {
+    const value = cell?.textContent?.trim() ?? '';
     return /^\d+$/.test(value) ? Number(value) : null;
   };
-  return [...table.querySelectorAll<HTMLTableRowElement>('tbody > tr')].flatMap((row) => {
-    const [id, user, problem, verdict, memory, time, , language, , submitted] = row.cells;
-    if (!submitted) return [];
-    const stamp = submitted.querySelector('[data-timestamp]')?.getAttribute('data-timestamp');
+  const linkPath = (cell: HTMLTableCellElement | undefined, prefix: string) => {
+    const link = cell?.querySelector<HTMLAnchorElement>(`a[href*="${prefix}"]`);
+    const href = link?.getAttribute('href');
+    const target = href?.startsWith('/') && !href.startsWith('//') ? siteUrl(url.origin + href) : href ? siteUrl(href) : undefined;
+    return target?.origin === url.origin ? target.pathname : '';
+  };
+  return [...table.querySelectorAll<HTMLTableRowElement>('tbody > tr')].flatMap(({ cells }) => {
+    const verdict = cells[verdictIndex];
+    const stamp = cells[submittedIndex]?.querySelector('[data-timestamp]')?.getAttribute('data-timestamp');
     const date = stamp && /^\d{1,12}$/.test(stamp) ? new Date(Number(stamp) * 1000).toISOString() : null;
     const parsed = statusSchema.safeParse({
-      submissionId: id.textContent?.trim(),
-      accountContext: user.querySelector('a[href^="/user/"]')?.getAttribute('href')?.match(/^\/user\/([a-zA-Z0-9_]+)$/)?.[1]?.toLowerCase(),
-      problemId: Number(problem.querySelector('a[href^="/problem/"]')?.getAttribute('href')?.match(/^\/problem\/(\d+)$/)?.[1]),
-      rawVerdict: verdict.querySelector('.result-text')?.textContent?.trim(),
-      memoryKb: number(memory),
-      executionTimeMs: number(time),
-      language: language.textContent?.trim(),
+      submissionId: cells[idIndex]?.textContent?.trim(),
+      accountContext: linkPath(cells[userIndex], '/user/').match(/^\/user\/([a-zA-Z0-9_]+)$/)?.[1]?.toLowerCase(),
+      problemId: Number(linkPath(cells[problemIndex], '/problem/').match(/^\/problem\/(\d+)$/)?.[1]),
+      rawVerdict: (verdict?.querySelector('.result-text') ?? verdict)?.textContent?.trim(),
+      memoryKb: number(cells[memoryIndex]),
+      executionTimeMs: number(cells[timeIndex]),
+      language: cells[languageIndex]?.textContent?.split('/')[0]?.trim(),
       submittedAt: date,
     });
     return parsed.success ? [parsed.data] : [];
   });
 }
-
 
 export function submissionLanguage(label: string): Language | undefined {
   switch (label.trim().toLowerCase()) {
@@ -97,3 +127,4 @@ export function submissionLanguage(label: string): Language | undefined {
     default: return undefined;
   }
 }
+
