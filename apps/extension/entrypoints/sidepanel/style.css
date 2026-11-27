@@ -63,7 +63,8 @@ body { margin: 0; }
   border-bottom: 1px solid var(--border);
 }
 
-.app-header strong { font-size: 13px; letter-spacing: .04em; }
+.app-mascot { flex: none; }
+
 .connection { color: var(--dim); font-size: 12px; }
 .connection-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .connection[data-online='true'] .connection-dot { color: var(--accent); }
@@ -104,28 +105,17 @@ body { margin: 0; }
   background: var(--accent-bg);
 }
 
-.ui-icon, .brand-icon {
+.ui-icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  object-fit: contain;
+}
+
+.brand-icon {
   width: 17px;
   height: 17px;
   flex: none;
-}
-
-.control-icon {
-  background: currentColor;
-  mask-position: center;
-  mask-repeat: no-repeat;
-  mask-size: contain;
-}
-
-.control-icon[data-control='settings'] { mask-image: url('./controls/settings.svg'); }
-.control-icon[data-control='copy'] { mask-image: url('./controls/copy.svg'); }
-.control-icon[data-control='test'] { mask-image: url('./controls/test.svg'); }
-.control-icon[data-control='run'] { mask-image: url('./controls/run.svg'); }
-.control-icon[data-control='stop'] { mask-image: url('./controls/stop.svg'); }
-.control-icon[data-control='open-official-page'] { mask-image: url('./controls/open-official-page.svg'); }
-.control-icon[data-control='debug'] { mask-image: url('./controls/debug.svg'); }
-
-.brand-icon {
   background: currentColor;
   mask: url('../../../../docs/images/icons/github.svg') center / contain no-repeat;
 }

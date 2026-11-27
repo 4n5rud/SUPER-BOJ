@@ -284,7 +284,7 @@ export default function App() {
 
   return <div className="shell" data-theme={settings.theme}>
     <header className="app-header">
-      <strong>SUPER_BOJ</strong>
+      <img className="app-mascot" src="/icons/32.png" width="24" height="24" alt="SUPER_BOJ" />
       <button className="connection" type="button" data-online={probe.online}
         onClick={() => { setScreen('Settings'); setMessage(''); }}>
         <span className="connection-dot" aria-hidden="true" />

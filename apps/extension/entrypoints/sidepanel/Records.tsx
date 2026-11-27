@@ -91,6 +91,8 @@ export function Submissions({ rows, online, openSetup, refresh, report }: {
     } catch (error) { report(String(error)); }
   }
 
+  const supportedRows = rows.filter((row) => submissionLanguage(row.language) !== undefined);
+
   return <section className="submission-actions" aria-label="제출 기록 연결">
     <p className="muted">채점 현황에서 연결할 제출을 선택하세요.</p>
     <div className="toolbar">
@@ -100,7 +102,8 @@ export function Submissions({ rows, online, openSetup, refresh, report }: {
       <p className="muted">제출 기록을 연결하려면 로컬 연결을 설정하세요.</p>
       <button onClick={openSetup}>로컬 연결 설정</button>
     </div>}
-    {online && rows.filter((row) => submissionLanguage(row.language) !== undefined).map((row) => <div key={row.submissionId} className="record">
+    {online && !supportedRows.length && <p className="muted">이 채점 현황에 연결할 수 있는 제출이 없습니다.</p>}
+    {online && supportedRows.map((row) => <div key={row.submissionId} className="record">
       <strong>#{row.submissionId}</strong> {row.accountContext} · #{row.problemId} · {row.language} · {row.rawVerdict}
       <div className="toolbar"><button disabled={busy} onClick={() => void choose(row)}>내 제출 연결</button>
         <button disabled={busy} onClick={() => void update(row)}>저장된 채점 결과 갱신</button></div>
