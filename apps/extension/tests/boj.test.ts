@@ -56,3 +56,24 @@ test('accepts only GitHub repository names that can be created', async () => {
   expect(['boj-solutions', 'BOJ_2026', 'a.b'].every(validRepositoryName)).toBe(true);
   expect(['', '.', '..', 'name.git', 'has space', 'ㄱ', 'x'.repeat(101)].some(validRepositoryName)).toBe(false);
 });
+
+test('builds a permission error the user can send as it is', async () => {
+  Object.assign(globalThis, { __SUPER_BOJ_GITHUB_CLIENT_ID__: 'test', __SUPER_BOJ_GITHUB_APP_SLUG__: 'test' });
+  const { permissionDeniedMessage } = await import('../adapters/github');
+  expect(permissionDeniedMessage(403, 'Resource not accessible by integration', 'administration=write'))
+    .toBe('GitHub App에 저장소 생성 권한이 없습니다. (403: Resource not accessible by integration, 필요 권한: administration=write)');
+  expect(permissionDeniedMessage(404, null, null)).toBe('GitHub App에 저장소 생성 권한이 없습니다. (404)');
+  expect(permissionDeniedMessage(403, 'a\n b', ' ')).toBe('GitHub App에 저장소 생성 권한이 없습니다. (403: a b)');
+});
+
+test('decides from the installation list whether the app is installed', async () => {
+  Object.assign(globalThis, { __SUPER_BOJ_GITHUB_CLIENT_ID__: 'test', __SUPER_BOJ_GITHUB_APP_SLUG__: 'test' });
+  const { appInstallation } = await import('../adapters/github');
+  expect(appInstallation([], 'test')).toEqual({ installed: false, selection: null });
+  expect(appInstallation([{ app_slug: 'test', repository_selection: 'all' }], 'test')).toEqual({ installed: true, selection: 'all' });
+  expect(appInstallation([{ app_slug: 'test', repository_selection: 'selected' }], 'test')).toEqual({ installed: true, selection: 'selected' });
+  // Another slug is ignored while this app's own entry exists.
+  expect(appInstallation([{ app_slug: 'other', repository_selection: 'all' }, { app_slug: 'test', repository_selection: 'selected' }], 'test'))
+    .toEqual({ installed: true, selection: 'selected' });
+  expect(appInstallation([{ repository_selection: 'all' }], 'test')).toEqual({ installed: true, selection: 'all' });
+});

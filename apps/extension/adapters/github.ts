@@ -115,6 +115,33 @@ export async function listGithubRepositories(token: string, signal: AbortSignal)
   return result;
 }
 
+const installations = z.object({
+  installations: z.array(z.object({ app_slug: z.string().optional(), repository_selection: z.enum(['all', 'selected']).optional() })).max(100),
+});
+
+export type AppInstallation = { installed: boolean; selection: 'all' | 'selected' | null };
+
+/**
+ * Decides from `GET /user/installations` whether the app is installed. The call only lists installations of the app the
+ * token belongs to, so an entry with another slug still counts when no entry carries this app's slug.
+ */
+export function appInstallation(rows: z.infer<typeof installations>['installations'], slug: string): AppInstallation {
+  const own = rows.filter((row) => row.app_slug === slug);
+  const found = own.length ? own : rows;
+  if (!found.length) return { installed: false, selection: null };
+  return { installed: true, selection: found.some((row) => row.repository_selection === 'all') ? 'all' : 'selected' };
+}
+
+export async function checkGithubInstallation(token: string, signal: AbortSignal): Promise<AppInstallation> {
+  const reply = await fetch('https://api.github.com/user/installations?per_page=100', {
+    headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}` },
+    credentials: 'omit', redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+  });
+  if (reply.status === 401) throw new Error('GitHub 로그인이 만료됐습니다. 다시 연결하세요.');
+  if (!reply.ok) throw new Error('GitHub App 설치 상태를 확인하지 못했습니다.');
+  return appInstallation(installations.parse(await reply.json()).installations, __SUPER_BOJ_GITHUB_APP_SLUG__);
+}
+
 const repositoryName = /^[A-Za-z0-9_.-]{1,100}$/;
 const created = z.object({
   full_name: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
@@ -124,6 +151,16 @@ const created = z.object({
 
 export function validRepositoryName(name: string) {
   return repositoryName.test(name) && name !== '.' && name !== '..' && !name.endsWith('.git');
+}
+
+/** The create call was refused (403 or 404); the repository may still be made on GitHub by hand. */
+export class GithubPermissionError extends Error {}
+
+/** Builds the text a user can send as-is: the HTTP status, GitHub's own message and the permission it asked for. */
+export function permissionDeniedMessage(status: number, apiMessage: string | null, accepted: string | null) {
+  const clean = (value: string | null) => value?.replace(/\s+/g, ' ').trim().slice(0, 200) ?? '';
+  const details = [clean(apiMessage), clean(accepted) && `필요 권한: ${clean(accepted)}`].filter(Boolean).join(', ');
+  return `GitHub App에 저장소 생성 권한이 없습니다. (${status}${details ? `: ${details}` : ''})`;
 }
 
 /** Creates a repository under the signed-in user's account with an initial commit so the default branch exists. */
@@ -137,7 +174,9 @@ export async function createGithubRepository(token: string, name: string, isPriv
   });
   if (reply.status === 401) throw new Error('GitHub 로그인이 만료됐습니다. 다시 연결하세요.');
   if (reply.status === 403 || reply.status === 404) {
-    throw new Error('GitHub App에 저장소 생성 권한이 없습니다. 앱 권한을 승인한 뒤 GitHub로 다시 연결하세요.');
+    const body: unknown = await reply.json().catch(() => null);
+    const apiMessage = body && typeof body === 'object' && 'message' in body && typeof body.message === 'string' ? body.message : null;
+    throw new GithubPermissionError(permissionDeniedMessage(reply.status, apiMessage, reply.headers.get('X-Accepted-GitHub-Permissions')));
   }
   if (reply.status === 422) throw new Error('같은 이름의 저장소가 이미 있거나 쓸 수 없는 이름입니다.');
   if (!reply.ok) throw new Error('GitHub 저장소를 만들지 못했습니다.');
