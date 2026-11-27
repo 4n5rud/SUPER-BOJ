@@ -164,7 +164,7 @@ pub async fn serve() -> anyhow::Result<()> {
                                 }
                             }
                             kind if local_request(kind) && tasks.len() < 8 => {
-                                let trigger_sync = matches!(kind, "CONFIRM_SUBMISSION" | "UPDATE_VERDICT" | "CONFIGURE_REPOSITORY" | "UPDATE_SETTINGS");
+                                let trigger_sync = matches!(kind, "CONFIRM_SUBMISSION" | "IMPORT_ACCEPTED_SUBMISSION" | "UPDATE_VERDICT" | "CONFIGURE_REPOSITORY" | "UPDATE_SETTINGS");
                                 if trigger_sync && connected {
                                     sync_tick.reset_after(Duration::from_millis(250));
                                 }

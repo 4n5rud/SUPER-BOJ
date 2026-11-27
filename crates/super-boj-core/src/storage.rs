@@ -152,6 +152,22 @@ struct Confirm {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Import {
+    #[serde(default)]
+    language: Language,
+    account_context: String,
+    problem_id: u32,
+    problem_title: String,
+    submission_id: String,
+    source: String,
+    raw_verdict: Option<String>,
+    execution_time_ms: Option<u32>,
+    memory_kb: Option<u32>,
+    submitted_at: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct VerdictUpdate {
     account_context: String,
     submission_id: String,
@@ -366,6 +382,67 @@ fn confirm(conn: &mut Connection, request: Confirm) -> Result<Value, StoreError>
     Ok(json!({"submissionId":request.submission_id,"duplicate":false}))
 }
 
+/// Records an accepted submission whose source was read from the user's own BOJ session.
+/// The preparation snapshot is created alongside it so the existing schema stays intact.
+fn import(conn: &mut Connection, request: Import) -> Result<Value, StoreError> {
+    if !valid_account(&request.account_context)
+        || !valid_id(&request.submission_id)
+        || request.problem_id == 0
+        || request.problem_title.trim().is_empty()
+        || request.problem_title.len() > 512
+        || request.source.is_empty()
+        || request.source.len() > 256 * 1024
+        || request.raw_verdict.as_ref().is_some_and(|s| s.len() > 256)
+        || request
+            .submitted_at
+            .as_ref()
+            .is_some_and(|s| s.len() > 40 || chrono::DateTime::parse_from_rfc3339(s).is_err())
+    {
+        return Err(invalid());
+    }
+    let (verdict, state) = verdict(request.raw_verdict.as_deref());
+    if verdict != "ACCEPTED" {
+        return Err(invalid());
+    }
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let existing = tx.query_row(
+        "SELECT problem_id=?3 AND source_code=?4 AND language=?5 FROM submissions WHERE account_context=?1 AND boj_submission_id=?2",
+        params![request.account_context, request.submission_id, request.problem_id, request.source, request.language.as_str()], |row| row.get::<_, bool>(0),
+    ).optional()?;
+    if let Some(same) = existing {
+        if !same {
+            return Err(mismatch());
+        }
+        return Ok(json!({"submissionId":request.submission_id,"duplicate":true}));
+    }
+    tx.execute(
+        "INSERT INTO problems(id, title, url) VALUES (?1, ?2, ?3)
+         ON CONFLICT(id) DO UPDATE SET title=excluded.title, updated_at=unixepoch()",
+        params![
+            request.problem_id,
+            request.problem_title.trim(),
+            format!("https://www.acmicpc.net/problem/{}", request.problem_id)
+        ],
+    )?;
+    let id = Uuid::new_v4().to_string();
+    tx.execute(
+        "INSERT INTO submission_intents(id, account_context, problem_id, language, source_code, source_hash, status)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'CONFIRMED')",
+        params![id, request.account_context, request.problem_id, request.language.as_str(), request.source, hash(&request.source)],
+    )?;
+    tx.execute(
+        "INSERT INTO submissions(intent_id, account_context, problem_id, boj_submission_id, language, source_code, source_hash,
+                                  verdict, raw_verdict, execution_time_ms, memory_kb, submitted_at, state)
+         SELECT id, account_context, problem_id, ?2, language, source_code, source_hash, ?3, ?4, ?5, ?6, ?7, ?8
+         FROM submission_intents WHERE id=?1",
+        params![id, request.submission_id, verdict, request.raw_verdict, request.execution_time_ms,
+                request.memory_kb, request.submitted_at, state],
+    )?;
+    crate::git::enqueue(&tx, tx.last_insert_rowid())?;
+    tx.commit()?;
+    Ok(json!({"submissionId":request.submission_id,"duplicate":false}))
+}
+
 fn update_verdict(conn: &mut Connection, request: VerdictUpdate) -> Result<Value, StoreError> {
     if !valid_account(&request.account_context)
         || !valid_id(&request.submission_id)
@@ -511,6 +588,7 @@ pub fn handles(kind: &str) -> bool {
         kind,
         "CREATE_SUBMISSION_INTENT"
             | "CONFIRM_SUBMISSION"
+            | "IMPORT_ACCEPTED_SUBMISSION"
             | "GET_PENDING_INTENTS"
             | "UPDATE_VERDICT"
             | "GET_HISTORY"
@@ -525,6 +603,7 @@ pub fn handle(kind: &str, payload: Value) -> Result<Value, StoreError> {
     match kind {
         "CREATE_SUBMISSION_INTENT" => prepare(&mut conn, parse(payload)?),
         "CONFIRM_SUBMISSION" => confirm(&mut conn, parse(payload)?),
+        "IMPORT_ACCEPTED_SUBMISSION" => import(&mut conn, parse(payload)?),
         "GET_PENDING_INTENTS" => pending(&conn, parse(payload)?),
         "UPDATE_VERDICT" => update_verdict(&mut conn, parse(payload)?),
         "GET_HISTORY" => history(&conn, parse(payload)?),

@@ -537,6 +537,117 @@
         },
         "type": {
           "type": "string",
+          "const": "IMPORT_ACCEPTED_SUBMISSION"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "accountContext": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_]{1,50}$"
+            },
+            "submissionId": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,19}$"
+            },
+            "problemId": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4294967295
+            },
+            "problemTitle": {
+              "type": "string",
+              "maxLength": 512
+            },
+            "language": {
+              "type": "string",
+              "enum": [
+                "rust",
+                "c",
+                "cpp",
+                "python",
+                "java"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "maxLength": 262144
+            },
+            "rawVerdict": {
+              "type": "string",
+              "maxLength": 256
+            },
+            "executionTimeMs": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "memoryKb": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "submittedAt": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 40,
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "accountContext",
+            "submissionId",
+            "problemId",
+            "problemTitle",
+            "source",
+            "rawVerdict"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "requestId",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
+        },
+        "type": {
+          "type": "string",
           "const": "UPDATE_VERDICT"
         },
         "payload": {

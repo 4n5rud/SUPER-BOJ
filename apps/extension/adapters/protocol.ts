@@ -55,6 +55,17 @@ const payloads = {
     memoryKb,
     submittedAt: z.iso.datetime({ offset: true }).max(40).nullish(),
   }),
+  IMPORT_ACCEPTED_SUBMISSION: z.strictObject({
+    ...attempt,
+    problemId,
+    problemTitle: boundedString(512).refine((title) => title.trim().length > 0),
+    language: languageSchema.optional(),
+    source: source.refine((value) => value.length > 0),
+    rawVerdict: unknownVerdict,
+    executionTimeMs,
+    memoryKb,
+    submittedAt: z.iso.datetime({ offset: true }).max(40).nullish(),
+  }),
   UPDATE_VERDICT: z.strictObject({
     ...attempt, rawVerdict: unknownVerdict, executionTimeMs, memoryKb,
   }),
@@ -78,6 +89,7 @@ const payloads = {
   UPDATE_SETTINGS: z.strictObject({ verdictWaitSeconds: z.number().int().min(0).max(86_400) }),
 };
 
+export const payloadSchemas = payloads;
 type NativeCommand = keyof typeof payloads;
 export const nativeCommandSchema = z.enum(Object.keys(payloads).filter((key) => key !== 'HELLO' && key !== 'SET_GITHUB_AUTH') as Exclude<NativeCommand, 'HELLO' | 'SET_GITHUB_AUTH'>[]);
 export const requestSchema = z.union(Object.entries(payloads).map(([type, payload]) => z.strictObject({

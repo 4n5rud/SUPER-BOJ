@@ -1,11 +1,12 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import { z } from 'zod';
-import { problemSchema, siteUrl, statusSchema } from '../adapters/boj';
+import { acceptedVerdict, problemSchema, siteUrl, statusSchema } from '../adapters/boj';
 import { NativeClient } from '../adapters/native';
 import { readGithubSession } from '../adapters/github';
 
-import { nativeCommandSchema } from '../adapters/protocol';
+import { nativeCommandSchema, payloadSchemas } from '../adapters/protocol';
 
+const gitStatusSchema = z.object({ repository: z.object({ autoSync: z.boolean() }).nullable() });
 const snapshotSchema = z.object({ problem: problemSchema.nullable(), rows: z.array(statusSchema).max(100).nullable() });
 
 export default defineBackground(() => {
@@ -15,6 +16,25 @@ export default defineBackground(() => {
   let changingGithub = false;
   void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);
   chrome.runtime.onMessage.addListener((message, sender, respond) => {
+    const fromBoj = sender.id === chrome.runtime.id && sender.tab !== undefined && sender.frameId === 0
+      && !!sender.url && !!siteUrl(sender.url);
+    if (fromBoj && (message?.type === 'BOJ_AUTO_UPLOAD_READY' || message?.type === 'BOJ_ACCEPTED')) {
+      const handleBoj = async () => {
+        if (message.type === 'BOJ_AUTO_UPLOAD_READY') {
+          // Accepted sources are read only after the user turned on automatic sync for a connected repository.
+          const status = await native.request('GET_GIT_STATUS', {}).catch(() => null);
+          return gitStatusSchema.safeParse(status).data?.repository?.autoSync === true;
+        }
+        const submission = payloadSchemas.IMPORT_ACCEPTED_SUBMISSION.parse(message.submission);
+        if (submission.rawVerdict !== acceptedVerdict) throw new Error('INVALID_MESSAGE');
+        return native.request('IMPORT_ACCEPTED_SUBMISSION', submission);
+      };
+      void handleBoj().then(
+        (data) => respond({ ok: true, data }),
+        (error: unknown) => respond({ ok: false, error: error instanceof Error ? error.message : 'INTERNAL_ERROR' }),
+      );
+      return true;
+    }
     if (sender.id !== chrome.runtime.id || sender.url !== chrome.runtime.getURL('sidepanel.html')) return;
     const handle = async () => {
       if (message?.type === 'GITHUB_CONFIGURE' || message?.type === 'GITHUB_SIGN_OUT') {

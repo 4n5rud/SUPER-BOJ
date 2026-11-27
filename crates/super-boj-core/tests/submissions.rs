@@ -217,3 +217,33 @@ fn records_each_language_and_rejects_cross_language_linking() {
         assert_eq!(attempt["source"], "same bytes");
     }
 }
+
+#[test]
+fn imports_accepted_submission_once_without_a_preparation_record() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut host = Host::start(dir.path());
+    let mut import = json!({
+        "accountContext": "alice", "problemId": 1330, "problemTitle": "두 수 비교하기",
+        "submissionId": "200", "source": "print(1)\n", "language": "python",
+        "rawVerdict": "맞았습니다!!", "executionTimeMs": 40, "memoryKb": 31120,
+        "submittedAt": "2026-11-27T08:00:00.000Z",
+    });
+    assert_eq!(host.ok("IMPORT_ACCEPTED_SUBMISSION", import.clone())["duplicate"], false);
+    assert_eq!(host.ok("IMPORT_ACCEPTED_SUBMISSION", import.clone())["duplicate"], true);
+    let attempt = host.ok("GET_ATTEMPT", json!({"accountContext": "alice", "submissionId": "200"}));
+    assert_eq!(attempt["verdict"], "ACCEPTED");
+    assert_eq!(attempt["language"], "python");
+    assert_eq!(attempt["source"], "print(1)\n");
+
+    import["source"] = json!("print(2)\n");
+    assert_eq!(
+        host.request("IMPORT_ACCEPTED_SUBMISSION", import.clone())["error"]["code"],
+        "SUBMISSION_MISMATCH"
+    );
+    import["submissionId"] = json!("201");
+    import["rawVerdict"] = json!("틀렸습니다");
+    assert_eq!(
+        host.request("IMPORT_ACCEPTED_SUBMISSION", import)["error"]["code"],
+        "INVALID_MESSAGE"
+    );
+}

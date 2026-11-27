@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { expect, test } from 'vitest';
-import { parseProblem, parseStatus, submissionLanguage } from '../adapters/boj';
+import { acceptedRows, parseProblem, parseStatus, problemTitle, submissionLanguage } from '../adapters/boj';
 
 test('reads only a matched pair of samples from an official problem page', () => {
   document.body.innerHTML = '<span id="problem_title">Test</span><pre id="sample-input-1">1 2\n</pre><pre id="sample-output-1">3\n</pre>';
@@ -32,4 +32,14 @@ test('reads reordered status columns and a language with a source action label',
     memoryKb: 1024, executionTimeMs: 12, language: 'Rust 2021', submittedAt: '2023-11-14T22:13:20.000Z',
   }]);
   expect(parseStatus(document, 'https://www.acmicpc.net/status?contest_id=1')).toBeNull();
+});
+
+test('selects only the signed-in user\'s accepted rows in supported languages', () => {
+  const row = { submissionId: '1', accountContext: 'alice', problemId: 1330, rawVerdict: '맞았습니다!!',
+    language: 'Python 3', submittedAt: null, memoryKb: null, executionTimeMs: null };
+  const rows = [row, { ...row, submissionId: '2', accountContext: 'bob' }, { ...row, submissionId: '3', rawVerdict: '틀렸습니다' },
+    { ...row, submissionId: '4', language: 'PyPy3' }, { ...row, submissionId: '5', language: 'Rust 2021' }];
+  expect(acceptedRows(rows, 'alice').map((item) => item.submissionId)).toEqual(['1', '5']);
+  expect(problemTitle('<span id="problem_title"> 두 수 비교하기 </span>')).toBe('두 수 비교하기');
+  expect(problemTitle('<p>login</p>')).toBeNull();
 });

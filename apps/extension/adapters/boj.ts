@@ -19,7 +19,7 @@ export const problemSchema = z.object({
 
 export type Problem = z.infer<typeof problemSchema>;
 
-function account(document: Document, url: URL) {
+export function account(document: Document, url: URL) {
   // The authenticated header's logout control and account link must agree.
   const logout = document.querySelector<HTMLAnchorElement>('a[href^="/logout"]');
   const profile = logout?.closest('ul')?.querySelector<HTMLAnchorElement>('a[href^="/user/"]');
@@ -128,3 +128,14 @@ export function submissionLanguage(label: string): Language | undefined {
   }
 }
 
+export const acceptedVerdict = '맞았습니다!!';
+
+/** Rows of the signed-in user's accepted submissions in a supported language, newest first. */
+export function acceptedRows(rows: Status[], me: string) {
+  return rows.filter((row) => row.accountContext === me && row.rawVerdict === acceptedVerdict
+    && submissionLanguage(row.language) !== undefined);
+}
+
+export function problemTitle(html: string) {
+  return new DOMParser().parseFromString(html, 'text/html').querySelector('#problem_title')?.textContent?.trim() || null;
+}

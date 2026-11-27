@@ -20,6 +20,10 @@
     "accepted": true
   },
   {
+    "request": {"protocolVersion":1,"requestId":"8f918d3c-9d41-4944-8b07-b72eb7e4c9a1","type":"IMPORT_ACCEPTED_SUBMISSION","payload":{"accountContext":"fixture_user","submissionId":"9001","problemId":1000,"problemTitle":"A+B","language":"python","source":"print(sum(map(int, input().split())))\n","rawVerdict":"맞았습니다!!","executionTimeMs":40,"memoryKb":31120,"submittedAt":"2026-11-27T08:00:00.000Z"}},
+    "accepted": true
+  },
+  {
     "request": {"protocolVersion":1,"requestId":"8f918d3c-9d41-4944-8b07-b72eb7e4c936","type":"GET_HISTORY","payload":{"accountContext":"fixture_user","problemId":1000,"limit":30}},
     "accepted": true
   },
