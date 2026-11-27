@@ -181,6 +181,13 @@ fn command(path: PathBuf, directory: &std::path::Path) -> Command {
         "RUSTUP_HOME",
         "CARGO_HOME",
         "SDKROOT",
+        // rustc locates the MSVC linker through these Windows folders. Without them it
+        // falls back to the first `link.exe` on PATH, which may be an unrelated tool.
+        "SystemDrive",
+        "ProgramData",
+        "ProgramFiles",
+        "ProgramFiles(x86)",
+        "ProgramW6432",
     ] {
         if let Some(value) = std::env::var_os(key) {
             cmd.env(key, value);
