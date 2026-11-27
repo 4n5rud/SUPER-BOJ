@@ -117,7 +117,9 @@ fn core_language_profiles_execute_when_their_tools_are_installed() {
         }));
         if profile["available"] == true {
             assert_eq!(result["status"], "COMPLETED", "{language}: {result}");
-            assert_eq!(result["stdout"], "3\n", "{language}");
+            // C, C++, Python and Java emit CRLF line endings on Windows.
+            let stdout = result["stdout"].as_str().unwrap().replace("\r\n", "\n");
+            assert_eq!(stdout, "3\n", "{language}");
         } else {
             assert_eq!(result["status"], "TOOLCHAIN_NOT_FOUND", "{language}: {result}");
         }
